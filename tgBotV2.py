@@ -159,8 +159,8 @@ def extract_close_signal(message):
         close_type = 'long'
     else:
         return None, None
-    
-    symbol_match = re.search(r'([A-Z]+)', message)
+    symbol_pattern = r"策略当前交易对[:：]?(\w+USDT\.P)"
+    symbol_match = re.search(symbol_pattern, message)
     if symbol_match:
         symbol = symbol_match.group(1).upper().replace('USDT.P', '').replace('USDT','')
         logger.info(f"检测到平仓信号 ({close_type}): {symbol}")

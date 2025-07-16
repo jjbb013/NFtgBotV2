@@ -47,7 +47,7 @@ def build_order_params(inst_id, side, entry_price, size, pos_side, take_profit, 
 
 def send_bark_notification(title, content, group=None):
     bark_key = os.getenv("BARK_KEY")
-    bark_group = group or os.getenv("BARK_GROUP", "未配置的GROUP")
+    bark_group = "NF-TgBotV2"  # 强制使用 NF-TgBotV2
     if not bark_key:
         print("[WARN] 未配置BARK_KEY，无法发送Bark通知")
         return

@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y supervisor \
 
 # 创建数据目录
 RUN mkdir -p /data/sessions /data/logs
+RUN mkdir -p /app/logs
 
 # 复制项目代码和supervisor配置
 COPY . .

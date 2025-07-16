@@ -40,6 +40,7 @@ TG_LOG_GROUP_ID = int(TG_LOG_GROUP_ID) if TG_LOG_GROUP_ID else None
 CHANNEL_IDS = [int(cid.strip()) for cid in TG_CHANNEL_IDS.split(',') if cid.strip()]
 
 # --- Session Management ---
+DATA_DIR = os.getenv('DATA_DIR', './data')
 SESSION_DIR = os.getenv('SESSION_DIR', './data/sessions')
 os.makedirs(SESSION_DIR, exist_ok=True)
 LAST_SESSION_PATH_FILE = os.path.join(SESSION_DIR, '../last_session_path.txt')

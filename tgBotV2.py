@@ -202,6 +202,7 @@ async def place_okx_order(account, action, symbol, size):
     try:
         api = Trade.TradeAPI(account['API_KEY'], account['SECRET_KEY'], account['PASSPHRASE'], False, account['FLAG'])
         price = get_latest_market_price(symbol)
+        print(f"price: {price}")
         if not price: return {"success": False, "error_msg": "无法获取市场价格"}
 
         tp_ratio = float(os.getenv(f"OKX{account['account_idx']}_TP_RATIO", '0.01'))
@@ -209,7 +210,9 @@ async def place_okx_order(account, action, symbol, size):
         
         side, pos_side = ('buy', 'long') if action == '做多' else ('sell', 'short')
         tp_price = price * (1 + (tp_ratio if side == 'buy' else -tp_ratio))
+        print(f"tp_price: {tp_price}")
         sl_price = price * (1 - (sl_ratio if side == 'buy' else -sl_ratio))
+        print(f"sl_price: {sl_price}")
 
         params = build_order_params(f"{symbol}-USDT-SWAP", side, price, size, pos_side, round(tp_price, 4), round(sl_price, 4))
         logger.info(f"下单参数: {json.dumps(params, indent=2)}")

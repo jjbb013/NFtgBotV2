@@ -93,12 +93,13 @@ def get_test_accounts():
                 'API_KEY': os.getenv(prefix + 'API_KEY'),
                 'SECRET_KEY': os.getenv(prefix + 'SECRET_KEY'),
                 'PASSPHRASE': os.getenv(prefix + 'PASSPHRASE'),
-                'FLAG': os.getenv(prefix + 'FLAG', '1')
+                'FLAG': os.getenv(prefix + 'FLAG', '0')
             })
     logger.info(f"共加载 {len(accounts)} 个有效OKX账户")
     return accounts
 
 TEST_ACCOUNTS = get_test_accounts()
+logger.info(f"OKX1_FLAG 环境变量实际读取值: {os.getenv('OKX1_FLAG')}")
 PROCESSED_IDS_FILE = os.path.join(DATA_DIR, 'processed_message_ids.json')
 
 def load_processed_ids():

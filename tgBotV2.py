@@ -175,7 +175,7 @@ def get_order_size(account_idx, symbol):
 
 def get_latest_market_price(symbol):
     try:
-        api = MarketData.MarketAPI(debug=False)
+        api = MarketData.MarketAPI(flag='0', debug=False)
         response = api.get_ticker(instId=f"{symbol.upper()}-USDT-SWAP")
         if response['code'] == '0':
             return float(response['data'][0]['last'])

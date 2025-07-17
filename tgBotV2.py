@@ -311,6 +311,12 @@ async def check_and_patch_missing_signals():
 @client.on(events.NewMessage(chats=CHANNEL_IDS))
 async def handler(event):
     msg_text = event.message.text or ''
+    
+    # 转发所有消息到日志群组，确认 Bot 正常运行
+    if TG_LOG_GROUP_ID:
+        forward_msg = f"【消息监听】频道:{event.chat_id}\n时间: {get_shanghai_time()}\n内容: {msg_text}"
+        await client.send_message(TG_LOG_GROUP_ID, forward_msg)
+    
     async with signal_lock:
         if event.id in PROCESSED_MESSAGE_IDS.get(event.chat_id, set()): return
         PROCESSED_MESSAGE_IDS.setdefault(event.chat_id, set()).add(event.id)

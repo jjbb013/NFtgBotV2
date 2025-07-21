@@ -45,7 +45,7 @@ def build_order_params(inst_id, side, entry_price, size, pos_side, take_profit, 
         "attachAlgoOrds": [attach_algo_ord]
     }
 
-def send_bark_notification(title, content, group=None):
+def send_bark_notification(title, content, group="NF-TgBotV2"):
     bark_key = os.getenv("BARK_KEY")
     bark_group = "NF-TgBotV2"  # 强制使用 NF-TgBotV2
     if not bark_key:

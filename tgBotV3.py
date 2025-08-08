@@ -272,7 +272,12 @@ async def process_open_signal(action, symbol, msg_text):
         content = build_bark_content({'symbol': symbol, 'action': action}, account['account_name'], result.get('market_price', 0), size, result.get('margin', 0), result.get('take_profit', 0), result.get('stop_loss', 0), result.get('clOrdId', ''), result.get('okx_resp'), result.get('error_msg'))
         full_log = f"{log_header}\n信号判断: {action} {symbol} (账户: {account['account_name']})\n操作返回: {json.dumps(result, ensure_ascii=False, indent=2)}"
         logger.info(full_log)
-        if TG_LOG_GROUP_ID: await client.send_message(TG_LOG_GROUP_ID, full_log)
+        if TG_LOG_GROUP_ID:
+            if len(full_log) > 4090:
+                log_to_send = f"{log_header}\n信号判断: {action} {symbol} (账户: {account['account_name']})\n操作返回: (响应过长，已截断，请查看本地日志)"
+                await client.send_message(TG_LOG_GROUP_ID, log_to_send)
+            else:
+                await client.send_message(TG_LOG_GROUP_ID, full_log)
         send_bark_notification(bark_title, content)
 
 async def process_close_signal(close_type, symbol, msg_text):
@@ -283,7 +288,12 @@ async def process_close_signal(close_type, symbol, msg_text):
         content = build_close_bark_content(close_type, symbol, account['account_name'], result.get('close_results', []), result.get('okx_resp'), result.get('error_msg'))
         full_log = f"{log_header}\n信号判断: 平仓 {close_type} {symbol} (账户: {account['account_name']})\n操作返回: {json.dumps(result, ensure_ascii=False, indent=2)}"
         logger.info(full_log)
-        if TG_LOG_GROUP_ID: await client.send_message(TG_LOG_GROUP_ID, full_log)
+        if TG_LOG_GROUP_ID:
+            if len(full_log) > 4090:
+                log_to_send = f"{log_header}\n信号判断: 平仓 {close_type} {symbol} (账户: {account['account_name']})\n操作返回: (响应过长，已截断，请查看本地日志)"
+                await client.send_message(TG_LOG_GROUP_ID, log_to_send)
+            else:
+                await client.send_message(TG_LOG_GROUP_ID, full_log)
         send_bark_notification(bark_title, content)
 
 # --- Background Tasks ---
@@ -379,5 +389,8 @@ async def main():
     await client.run_until_disconnected()
 
 if __name__ == '__main__':
-    try: asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit): logger.info("程序退出。")
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        logger.critical(f"机器人主程序异常退出: {e}")
+        sys.exit(1)

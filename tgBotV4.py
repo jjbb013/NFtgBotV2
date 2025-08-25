@@ -124,7 +124,7 @@ PROCESSED_MESSAGE_IDS = load_processed_ids()
 # --- Signal Extraction (from root tgBotV2.py) ---
 def extract_trade_info(message):
     logger.debug(f"正在从消息中提取交易信息: {message[:100]}...")
-    close_keywords = ['空止盈', '空止损', '多止盈', '多止损', '平多', '平空', 'MA 止损']
+    close_keywords = ['空止盈', '空止损', '多止盈', '多止损', '平多', '平空', 'MA止损','MA 止损']
     if any(keyword in message for keyword in close_keywords):
         return None, None
     
@@ -156,7 +156,7 @@ def extract_trade_info(message):
 def extract_close_signal(message):
     logger.debug(f"正在从消息中提取平仓信号: {message[:100]}...")
     close_type = None
-    if any(kw in message for kw in ['执行交易:MA 止损', 'MA 止损']):
+    if any(kw in message for kw in ['执行交易:MA止损', 'MA止损','MA 止损']):
         close_type = 'both'
     elif any(kw in message for kw in ['空止盈', '空止损', '平空']):
         close_type = 'short'

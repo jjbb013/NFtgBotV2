@@ -25,4 +25,4 @@ COPY . .
 EXPOSE 8000
 
 # 启动命令：直接启动supervisor
-CMD ["supervisord", "-c", "/app/supervisord.conf"] 
+CMD ["supervisord", "-c", "/app/supervisord.conf"]

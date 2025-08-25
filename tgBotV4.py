@@ -525,7 +525,7 @@ async def set_leverage_for_all_accounts():
 
 async def send_startup_symbol_prices():
     logger.info("启动价格播报...")
-    for symbol_id in ["BTC-USDT-SWAP", "ETH-USDT-SWAP"]:
+    for symbol_id in ["BTC-USDT-SWAP", "ETH-USDT-SWAP", "DOGE-USDT-SWAP", "SOL-USDT-SWAP"]:
         price = get_latest_market_price(symbol_id.split('-')[0])
         if price and TG_LOG_GROUP_ID:
             await client.send_message(TG_LOG_GROUP_ID, f"【开盘价】{symbol_id}: {price}")

@@ -84,7 +84,9 @@ async def validate_session():
 
 async def main():
     """主循环，定期执行验证"""
-    logger.info("Session 验证服务已启动。")
+    logger.info("Session 验证服务已启动，延迟60秒以避免启动冲突。")
+    await asyncio.sleep(60)  # 延迟60秒
+    logger.info("延迟结束，开始执行首次检查。")
     while True:
         is_valid = await validate_session()
         if not is_valid:

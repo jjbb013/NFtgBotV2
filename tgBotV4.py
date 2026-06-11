@@ -238,9 +238,16 @@ def build_bark_content(signal, account_name, entry_price, size, margin, take_pro
         lines.extend(["", f"服务器响应代码: {okx_resp.get('code', '')}", f"服务器响应消息: {okx_resp.get('msg', '')}"])
     return "\n".join(lines)
 
-def build_close_bark_content(close_type, symbol, account_name, close_results, okx_resp=None, error_msg=None):
+def build_close_bark_content(close_type, symbol, account_name, close_results, okx_resp=None, error_msg=None, total_upl=None, pnl_pct=None):
     now = get_shanghai_time()
     lines = [f"账户: {account_name}", f"交易标的: {symbol}", f"信号类型: 平仓{close_type}", f"平仓结果: {len(close_results)} 个持仓", f"时间: {now}"]
+    if total_upl is not None:
+        pnl_sign = "+" if total_upl >= 0 else ""
+        if pnl_pct is not None:
+            pct_sign = "+" if pnl_pct >= 0 else ""
+            lines.append(f"盈亏: {pnl_sign}{total_upl:.4f} USDT ({pct_sign}{pnl_pct:.2f}%)")
+        else:
+            lines.append(f"盈亏: {pnl_sign}{total_upl:.4f} USDT")
     if close_results: [lines.append(f"- {res['pos_side']}: {res['size']} (订单ID: {res['order_id']})") for res in close_results]
     if error_msg: lines.extend(["⚠️ 平仓失败 ⚠️", f"错误: {error_msg}"])
     if okx_resp: lines.extend([f"服务器响应代码: {okx_resp.get('code', '')}", f"服务器响应消息: {okx_resp.get('msg', '')}"])
@@ -319,6 +326,26 @@ async def close_okx_position(account, symbol, close_type):
             logger.info(f"[{account['account_name']}] 未找到 {symbol} 的 {close_type} 方向持仓可供平仓。")
             return {"success": True, "close_results": [], "message": "没有找到可平仓位"}
 
+        # 计算汇总盈亏（基于平仓前的未实现盈亏，近似值）
+        total_upl = 0.0
+        total_upl_ratio = 0.0
+        valid_ratio_count = 0
+        for p in positions_to_close:
+            try:
+                upl = float(p.get('upl', 0) or 0)
+                total_upl += upl
+                upl_ratio = p.get('uplRatio')
+                if upl_ratio is not None:
+                    ratio_val = float(upl_ratio)
+                    # OKX 返回的 uplRatio 通常为小数（如 0.05 表示 5%），若小于 1 则转为百分比
+                    if abs(ratio_val) < 1:
+                        ratio_val = ratio_val * 100
+                    total_upl_ratio += ratio_val
+                    valid_ratio_count += 1
+            except (ValueError, TypeError):
+                continue
+        pnl_pct = (total_upl_ratio / valid_ratio_count) if valid_ratio_count > 0 else None
+
         for pos in positions_to_close:
             pos_side_to_close = pos.get('posSide')
             side = 'sell' if pos_side_to_close == 'long' else 'buy'
@@ -337,7 +364,7 @@ async def close_okx_position(account, symbol, close_type):
                     'pos_side': pos_side_to_close, 'size': pos['pos'], 
                     'error_msg': close_resp['data'][0]['sMsg']
                 })
-        return {"success": True, "close_results": results, "okx_resp": resp}
+        return {"success": True, "close_results": results, "okx_resp": resp, "total_upl": total_upl, "pnl_pct": pnl_pct}
     except Exception as e:
         logger.error(f"平仓异常: {e}")
         return {"success": False, "error_msg": str(e)}
@@ -438,7 +465,7 @@ async def process_close_signal(close_type, symbol, msg_text):
 
         result = await close_okx_position(account, symbol, close_type)
         bark_title = f"Tg信号策略平仓-{symbol}"
-        content = build_close_bark_content(close_type, symbol, account['account_name'], result.get('close_results', []), result.get('okx_resp'), result.get('error_msg'))
+        content = build_close_bark_content(close_type, symbol, account['account_name'], result.get('close_results', []), result.get('okx_resp'), result.get('error_msg'), result.get('total_upl'), result.get('pnl_pct'))
         full_log = f"{log_header}\n信号判断: 平仓 {close_type} {symbol} (账户: {account['account_name']})\n操作返回: {json.dumps(result, ensure_ascii=False, indent=2)}"
         logger.info(full_log)
         if TG_LOG_GROUP_ID:

@@ -907,8 +907,6 @@ async def check_and_patch_missing_signals():
     while True:
         await asyncio.sleep(PATCH_MISSING_SIGNALS_INTERVAL)
         logger.info('【定时补单检查】启动...')
-        global PROCESSED_MESSAGE_IDS
-        PROCESSED_MESSAGE_IDS = load_processed_ids()
         try:
             for channel_id in CHANNEL_IDS:
                 async for msg in client.iter_messages(channel_id, limit=20):
@@ -931,12 +929,13 @@ async def check_and_patch_missing_signals():
 
 async def init_processed_ids():
     logger.info("正在初始化消息ID缓存...")
-    for channel_id in CHANNEL_IDS:
-        PROCESSED_MESSAGE_IDS.setdefault(channel_id, set())
-        async for message in client.iter_messages(channel_id, limit=50):
-            if message:
-                PROCESSED_MESSAGE_IDS[channel_id].add(message.id)
-    save_processed_ids(PROCESSED_MESSAGE_IDS)
+    async with signal_lock:
+        for channel_id in CHANNEL_IDS:
+            PROCESSED_MESSAGE_IDS.setdefault(channel_id, set())
+            async for message in client.iter_messages(channel_id, limit=50):
+                if message:
+                    PROCESSED_MESSAGE_IDS[channel_id].add(message.id)
+        await asyncio.to_thread(save_processed_ids, PROCESSED_MESSAGE_IDS)
     logger.info("消息ID缓存初始化完成。")
 
 

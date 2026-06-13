@@ -10,6 +10,7 @@ from collections import deque
 
 import json
 from telethon import TelegramClient, events
+from telethon.errors import SessionPasswordNeededError
 from utils import get_shanghai_time, send_bark_notification, build_order_params, set_account_leverage
 import okx.PublicData as PublicData
 
@@ -334,6 +335,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from pydantic import BaseModel
 import secrets
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -409,7 +411,7 @@ async def telegram_status(username: str = Depends(verify_credentials)):
         'channel_ids': CHANNEL_IDS,
         'me': None,
     }
-    if client and await client.is_connected():
+    if client and client.is_connected():
         status['connected'] = True
         try:
             status['authorized'] = await client.is_user_authorized()
@@ -559,6 +561,7 @@ def save_processed_ids(ids):
 
 PROCESSED_MESSAGE_IDS = load_processed_ids()
 signal_lock = asyncio.Lock()
+login_lock = asyncio.Lock()
 
 
 # --- OKX Helpers (ported from tgBotV4, adapted for asyncio) ---
@@ -893,7 +896,7 @@ async def health_check():
     while True:
         await asyncio.sleep(HEALTH_CHECK_INTERVAL)
         try:
-            if not await client.is_connected():
+            if not client.is_connected():
                 raise ConnectionError("Client disconnected")
             await client.get_me()
             logger.info("【健康检查】Telegram 连接正常")
@@ -965,3 +968,189 @@ async def send_startup_symbol_prices():
         if price and TG_LOG_GROUP_ID:
             await client.send_message(TG_LOG_GROUP_ID, f"【开盘价】{symbol_id}: {price}")
 
+
+
+# --- Telegram Web Re-login Flow ---
+login_state = {
+    'phone': None,
+    'phone_code_hash': None,
+    'temp_client': None,
+}
+
+background_task_refs = []
+
+
+async def stop_background_tasks():
+    global background_task_refs
+    for task in background_task_refs:
+        if not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+    background_task_refs = []
+    logger.info('后台任务已停止')
+
+
+async def start_background_tasks():
+    global background_task_refs
+    await stop_background_tasks()
+    if client and client.is_connected():
+        background_task_refs = [
+            asyncio.create_task(check_and_patch_missing_signals()),
+            asyncio.create_task(health_check()),
+        ]
+        logger.info('后台任务已启动')
+    else:
+        logger.warning('Telegram 客户端未连接，后台任务暂不启动')
+
+
+async def replace_client(new_client):
+    global client
+    if client and client.is_connected():
+        try:
+            await client.disconnect()
+        except Exception as e:
+            logger.warning(f'断开旧 client 时出错: {e}')
+    client = new_client
+    client.on(events.NewMessage(chats=CHANNEL_IDS))(handler)
+
+
+class PhoneRequest(BaseModel):
+    phone: str
+
+
+class CodeRequest(BaseModel):
+    phone: str
+    code: str
+    phone_code_hash: str
+
+
+class PasswordRequest(BaseModel):
+    password: str
+
+
+@app.post('/api/telegram/login/start')
+async def telegram_login_start(
+    req: PhoneRequest,
+    username: str = Depends(verify_credentials)
+):
+    async with login_lock:
+        return await _telegram_login_start(req)
+
+
+async def _telegram_login_start(req: PhoneRequest):
+    global login_state
+    await stop_background_tasks()
+    if client and client.is_connected():
+        try:
+            await client.disconnect()
+        except Exception as e:
+            logger.warning(f'断开当前 client 时出错: {e}')
+
+    # 清理之前未完成的登录会话，避免临时客户端泄漏
+    old_temp_client = login_state.get('temp_client')
+    if old_temp_client and old_temp_client.is_connected():
+        try:
+            await old_temp_client.disconnect()
+        except Exception as e:
+            logger.warning(f'断开旧临时客户端时出错: {e}')
+    login_state = {'phone': None, 'phone_code_hash': None, 'temp_client': None}
+
+    session_path = await asyncio.to_thread(get_session_file)
+    temp_client = TelegramClient(session_path, TG_API_ID, TG_API_HASH)
+    try:
+        await temp_client.connect()
+        sent = await temp_client.send_code_request(req.phone)
+        login_state = {
+            'phone': req.phone,
+            'phone_code_hash': sent.phone_code_hash,
+            'temp_client': temp_client,
+        }
+        return {
+            'success': True,
+            'phone_code_hash': sent.phone_code_hash,
+            'message': '验证码已发送',
+        }
+    except Exception as e:
+        logger.error(f'发送验证码失败: {e}')
+        if temp_client.is_connected():
+            await temp_client.disconnect()
+        login_state = {'phone': None, 'phone_code_hash': None, 'temp_client': None}
+        await start_background_tasks()
+        return {'success': False, 'error': str(e)}
+
+
+@app.post('/api/telegram/login/verify')
+async def telegram_login_verify(
+    req: CodeRequest,
+    username: str = Depends(verify_credentials)
+):
+    async with login_lock:
+        return await _telegram_login_verify(req)
+
+
+async def _telegram_login_verify(req: CodeRequest):
+    global login_state
+    temp_client = login_state.get('temp_client')
+    if not temp_client:
+        return {'success': False, 'error': '登录会话已过期，请重新开始'}
+    try:
+        await temp_client.sign_in(
+            phone=req.phone,
+            code=req.code,
+            phone_code_hash=req.phone_code_hash,
+        )
+        await finalize_login(temp_client)
+        return {'success': True, 'message': '登录成功'}
+    except SessionPasswordNeededError:
+        return {'success': True, 'need_password': True, 'message': '需要二步验证密码'}
+    except Exception as e:
+        logger.error(f'验证码登录失败: {e}')
+        await cleanup_login(temp_client)
+        return {'success': False, 'error': str(e)}
+
+
+async def finalize_login(new_client):
+    global login_state
+    await replace_client(new_client)
+    session_path = await asyncio.to_thread(get_session_file)
+    try:
+        await asyncio.to_thread(os.chmod, session_path, 0o600)
+    except Exception as e:
+        logger.warning(f'设置 session 文件权限失败: {e}')
+    await start_background_tasks()
+    login_state = {'phone': None, 'phone_code_hash': None, 'temp_client': None}
+
+
+async def cleanup_login(temp_client):
+    global login_state
+    if temp_client and temp_client.is_connected():
+        await temp_client.disconnect()
+    login_state = {'phone': None, 'phone_code_hash': None, 'temp_client': None}
+    await start_background_tasks()
+
+
+@app.post('/api/telegram/login/password')
+async def telegram_login_password(
+    req: PasswordRequest,
+    username: str = Depends(verify_credentials)
+):
+    async with login_lock:
+        return await _telegram_login_password(req)
+
+
+async def _telegram_login_password(req: PasswordRequest):
+    global login_state
+    temp_client = login_state.get('temp_client')
+    if not temp_client:
+        return {'success': False, 'error': '登录会话已过期，请重新开始'}
+    try:
+        await temp_client.check_password(req.password)
+        await finalize_login(temp_client)
+        return {'success': True, 'message': '登录成功'}
+    except Exception as e:
+        logger.error(f'二步验证失败: {e}')
+        await cleanup_login(temp_client)
+        return {'success': False, 'error': str(e)}

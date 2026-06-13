@@ -711,6 +711,12 @@ async def close_okx_position(account, symbol, close_type):
 # --- Signal Processors (ported from tgBotV4) ---
 async def process_open_signal(action, symbol, msg_text):
     log_header = f"【补单】\n原始信息: {msg_text}" if "补单" in msg_text else f"【实时信号】\n原始信息: {msg_text}"
+
+    price = await get_latest_market_price(symbol)
+    if not price:
+        logger.error(f"无法获取 {symbol} 的市场价格，跳过下单。")
+        return
+
     for account in TEST_ACCOUNTS:
         balance = await get_usdt_balance(account)
         if balance is None:
@@ -720,10 +726,6 @@ async def process_open_signal(action, symbol, msg_text):
         position_ratio = float(os.getenv(f"OKX{account['account_idx']}_POSITION_RATIO", "0.25"))
         margin = balance * position_ratio
         leverage = int(os.getenv(f"OKX{account['account_idx']}_LEVERAGE", "10"))
-        price = await get_latest_market_price(symbol)
-        if not price:
-            logger.error(f"无法获取 {symbol} 的市场价格，跳过下单。")
-            continue
 
         order_value = margin * leverage
         inst_id = f"{symbol.upper()}-USDT-SWAP"

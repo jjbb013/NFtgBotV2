@@ -306,10 +306,10 @@ def get_active_version():
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
             match = re.search(
-                r'command\s*=\s*(?:[/\w.-]+)?python3?\b'
+                r'^\s*command\s*=\s*(?:[/\w.-]+)?python3?(?:\.\d+)?\b'
                 r'(?:\s+-\S+)*\s+\S*/?(tgBotV\d+\.py)',
                 content,
-                re.IGNORECASE,
+                re.MULTILINE | re.IGNORECASE,
             )
             if match:
                 return match.group(1)

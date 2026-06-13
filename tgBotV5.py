@@ -702,6 +702,18 @@ async def close_okx_position(account, symbol, close_type):
                     'pos_side': pos_side_to_close, 'size': pos['pos'],
                     'error_msg': close_data.get('sMsg')
                 })
+
+        has_errors = any('error_msg' in res for res in results)
+        if has_errors:
+            error_messages = [f"{res['pos_side']}: {res['error_msg']}" for res in results if 'error_msg' in res]
+            return {
+                "success": False,
+                "close_results": results,
+                "okx_resp": resp,
+                "total_upl": total_upl,
+                "pnl_pct": pnl_pct,
+                "error_msg": "; ".join(error_messages)
+            }
         return {"success": True, "close_results": results, "okx_resp": resp, "total_upl": total_upl, "pnl_pct": pnl_pct}
     except Exception as e:
         logger.error(f"平仓异常: {e}")
@@ -810,7 +822,10 @@ def build_close_bark_content(close_type, symbol, account_name, close_results, ok
             lines.append(f"盈亏: {pnl_sign}{total_upl:.4f} USDT")
     if close_results:
         for res in close_results:
-            lines.append(f"- {res['pos_side']}: {res['size']} (订单ID: {res['order_id']})")
+            if 'order_id' in res:
+                lines.append(f"- {res['pos_side']}: {res['size']} (订单ID: {res['order_id']})")
+            else:
+                lines.append(f"- {res['pos_side']}: {res['size']} (失败: {res.get('error_msg', '未知错误')})")
     if error_msg:
         lines.extend(["⚠️ 平仓失败 ⚠️", f"错误: {error_msg}"])
     if okx_resp:
@@ -830,10 +845,14 @@ async def process_close_signal(close_type, symbol, msg_text):
             continue
 
         result = await close_okx_position(account, symbol, close_type)
-        bark_title = f"Tg信号策略平仓-{symbol}"
+        close_results = result.get('close_results', [])
+        error_msg = result.get('error_msg')
+        has_errors = any('error_msg' in res for res in close_results)
+        icon = "❌ " if error_msg or has_errors else ""
+        bark_title = f"{icon}Tg信号策略平仓-{symbol}"
         content = build_close_bark_content(
             close_type, symbol, account['account_name'],
-            result.get('close_results', []), result.get('okx_resp'), result.get('error_msg'),
+            close_results, result.get('okx_resp'), error_msg,
             result.get('total_upl'), result.get('pnl_pct')
         )
         full_log = f"{log_header}\n信号判断: 平仓 {close_type} {symbol} (账户: {account['account_name']})\n操作返回: {json.dumps(result, ensure_ascii=False, indent=2)}"
@@ -856,7 +875,7 @@ async def handler(event):
         if event.id in PROCESSED_MESSAGE_IDS.get(event.chat_id, set()):
             return
         PROCESSED_MESSAGE_IDS.setdefault(event.chat_id, set()).add(event.id)
-        save_processed_ids(PROCESSED_MESSAGE_IDS)
+        await asyncio.to_thread(save_processed_ids, PROCESSED_MESSAGE_IDS)
 
         if TG_LOG_GROUP_ID:
             forward_msg = f"【消息监听】频道:{event.chat_id}\n时间: {get_shanghai_time()}\n内容: {msg_text}"
@@ -899,7 +918,7 @@ async def check_and_patch_missing_signals():
                         if msg.id in PROCESSED_MESSAGE_IDS.get(channel_id, set()):
                             continue
                         PROCESSED_MESSAGE_IDS.setdefault(channel_id, set()).add(msg.id)
-                        save_processed_ids(PROCESSED_MESSAGE_IDS)
+                        await asyncio.to_thread(save_processed_ids, PROCESSED_MESSAGE_IDS)
                         action, symbol = extract_trade_info(msg.text)
                         if action and symbol:
                             await process_open_signal(action, symbol, f"补单: {msg.text}")

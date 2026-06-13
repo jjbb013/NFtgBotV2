@@ -321,7 +321,7 @@ def get_active_version():
     return 'unknown'
 
 
-from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi import FastAPI, Request, Depends, HTTPException, status, Query
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -375,4 +375,81 @@ async def dashboard(request: Request, username: str = Depends(verify_credentials
     return templates.TemplateResponse('dashboard.html', {
         'request': request,
     })
+
+
+# Global Telegram client; created during startup in Task 13
+client = None
+
+
+@app.get('/api/system/status')
+async def system_status(username: str = Depends(verify_credentials)):
+    return {
+        'active_version': get_active_version(),
+        'git': get_git_info(),
+    }
+
+
+@app.get('/api/telegram/status')
+async def telegram_status(username: str = Depends(verify_credentials)):
+    session_path = get_session_file()
+    status = {
+        'session_path': session_path,
+        'connected': False,
+        'authorized': False,
+        'channel_ids': CHANNEL_IDS,
+        'me': None,
+    }
+    if client and client.is_connected():
+        status['connected'] = True
+        try:
+            status['authorized'] = await client.is_user_authorized()
+            if status['authorized']:
+                me = await client.get_me()
+                status['me'] = {
+                    'id': me.id,
+                    'first_name': me.first_name,
+                    'last_name': me.last_name,
+                    'username': me.username,
+                }
+        except Exception as e:
+            logger.error(f'获取 Telegram 状态时出错: {e}')
+    return status
+
+
+TEST_ACCOUNTS = get_test_accounts()
+
+
+@app.get('/api/okx/status')
+async def okx_status(username: str = Depends(verify_credentials)):
+    accounts = []
+    for acc in TEST_ACCOUNTS:
+        connected = await get_okx_connection_status(acc)
+        balance = await get_usdt_balance(acc) if connected else None
+        pnl = await get_recent_pnl(acc, days=7) if connected else None
+        accounts.append({
+            'name': acc['account_name'],
+            'connected': connected,
+            'balance': balance,
+            'pnl': pnl,
+        })
+    return {'accounts': accounts}
+
+
+@app.get('/api/okx/orders')
+async def okx_orders(
+    account: str = Query(...),
+    username: str = Depends(verify_credentials)
+):
+    target = next((a for a in TEST_ACCOUNTS if a['account_name'] == account), None)
+    if not target:
+        raise HTTPException(status_code=404, detail='Account not found')
+    orders = await get_recent_orders(target, limit=20)
+    return {'orders': orders}
+
+
+@app.get('/api/logs')
+async def logs(username: str = Depends(verify_credentials)):
+    raw_lines = log_buffer.get_lines(100)
+    sanitized = [sanitize_log(line) for line in raw_lines]
+    return {'lines': sanitized}
 

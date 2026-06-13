@@ -320,3 +320,38 @@ def get_active_version():
     logger.warning('未在 supervisord.conf 中找到有效的 tgBotV 启动命令')
     return 'unknown'
 
+
+from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse, JSONResponse
+import secrets
+
+app = FastAPI()
+security = HTTPBasic()
+
+templates = Jinja2Templates(directory='templates')
+app.mount('/static', StaticFiles(directory='static'), name='static')
+
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, DASHBOARD_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, DASHBOARD_PASSWORD)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Incorrect username or password',
+            headers={'WWW-Authenticate': 'Basic'},
+        )
+    return credentials.username
+
+
+@app.get('/', response_class=HTMLResponse)
+async def dashboard(request: Request, username: str = Depends(verify_credentials)):
+    return templates.TemplateResponse('dashboard.html', {
+        'request': request,
+        'username': username,
+        'channel_ids': CHANNEL_IDS,
+    })
+

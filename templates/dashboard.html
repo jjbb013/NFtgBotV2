@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TgBotV5 Dashboard</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+    <header>
+        <h1>Telegram 信号交易机器人 V5</h1>
+        <span id="current-time">--</span>
+        <button onclick="refreshAll()">刷新全部</button>
+    </header>
+
+    <main>
+        <section id="system-status">
+            <h2>系统状态</h2>
+            <div id="system-status-content">加载中...</div>
+        </section>
+
+        <section id="telegram-status">
+            <h2>Telegram 状态</h2>
+            <div id="telegram-status-content">加载中...</div>
+            <button id="relogin-btn" style="display:none;" onclick="showLoginWizard()">重新登录</button>
+        </section>
+
+        <section id="login-wizard" style="display:none;">
+            <h3>Telegram 重新登录</h3>
+            <div id="login-step-1">
+                <input type="text" id="phone" placeholder="手机号，如 +8612345678901">
+                <button onclick="startLogin()">获取验证码</button>
+            </div>
+            <div id="login-step-2" style="display:none;">
+                <input type="text" id="code" placeholder="验证码">
+                <button onclick="verifyCode()">验证</button>
+            </div>
+            <div id="login-step-3" style="display:none;">
+                <input type="password" id="password" placeholder="二步验证密码">
+                <button onclick="verifyPassword()">完成登录</button>
+            </div>
+            <div id="login-result"></div>
+        </section>
+
+        <section id="okx-status">
+            <h2>OKX 账户</h2>
+            <div id="okx-status-content">加载中...</div>
+        </section>
+
+        <section id="logs">
+            <h2>运行日志 <button onclick="refreshLogs()">刷新日志</button></h2>
+            <pre id="logs-content">加载中...</pre>
+        </section>
+    </main>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

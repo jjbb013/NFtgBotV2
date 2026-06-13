@@ -55,18 +55,32 @@ def sanitize_log(line: str) -> str:
 
 from dotenv import load_dotenv
 
-load_dotenv('.env')
+# Load environment-specific .env first, fall back to .env
+if not load_dotenv('.env.local'):
+    load_dotenv('.env')
+
+
+def _int_env(name, default=None):
+    val = os.getenv(name, default)
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except ValueError:
+        logger.error(f'环境变量 {name} 必须是整数，当前值: {val!r}')
+        sys.exit(1)
+
 
 TG_API_ID = os.getenv('TG_API_ID')
 TG_API_HASH = os.getenv('TG_API_HASH')
 TG_LOG_GROUP_ID = os.getenv('TG_LOG_GROUP_ID')
 TG_CHANNEL_IDS = os.getenv('TG_CHANNEL_IDS', '')
-PATCH_MISSING_SIGNALS_INTERVAL = int(os.getenv('PATCH_MISSING_SIGNALS_INTERVAL', 30))
-HEALTH_CHECK_INTERVAL = int(os.getenv('HEALTH_CHECK_INTERVAL', 300))
+PATCH_MISSING_SIGNALS_INTERVAL = int(os.getenv('PATCH_MISSING_SIGNALS_INTERVAL', '30'))
+HEALTH_CHECK_INTERVAL = int(os.getenv('HEALTH_CHECK_INTERVAL', '300'))
 
 DASHBOARD_USERNAME = os.getenv('DASHBOARD_USERNAME')
 DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD')
-DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '8000'))
+DASHBOARD_PORT = _int_env('DASHBOARD_PORT', '8000')
 
 if not all([TG_API_ID, TG_API_HASH, TG_CHANNEL_IDS]):
     logger.error('关键环境变量 TG_API_ID, TG_API_HASH, TG_CHANNEL_IDS 未配置')
@@ -76,12 +90,20 @@ if not all([DASHBOARD_USERNAME, DASHBOARD_PASSWORD]):
     logger.error('Web Dashboard 环境变量 DASHBOARD_USERNAME, DASHBOARD_PASSWORD 未配置')
     sys.exit(1)
 
-TG_API_ID = int(TG_API_ID)
-TG_LOG_GROUP_ID = int(TG_LOG_GROUP_ID) if TG_LOG_GROUP_ID else None
-CHANNEL_IDS = [int(cid.strip()) for cid in TG_CHANNEL_IDS.split(',') if cid.strip()]
+TG_API_ID = _int_env('TG_API_ID')
+TG_LOG_GROUP_ID = _int_env('TG_LOG_GROUP_ID') if TG_LOG_GROUP_ID else None
+CHANNEL_IDS = []
+for cid in TG_CHANNEL_IDS.split(','):
+    cid = cid.strip()
+    if cid:
+        try:
+            CHANNEL_IDS.append(int(cid))
+        except ValueError:
+            logger.error(f'TG_CHANNEL_IDS 中的频道 ID 必须是整数: {cid!r}')
+            sys.exit(1)
 
 DATA_DIR = os.getenv('DATA_DIR', './data')
 SESSION_DIR = os.getenv('SESSION_DIR', './data/sessions')
 os.makedirs(SESSION_DIR, exist_ok=True)
-LAST_SESSION_PATH_FILE = os.path.join(SESSION_DIR, '../last_session_path.txt')
+LAST_SESSION_PATH_FILE = os.path.join(DATA_DIR, 'last_session_path.txt')
 

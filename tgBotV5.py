@@ -330,7 +330,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 import secrets
 
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 
 class StaticAuthMiddleware(BaseHTTPMiddleware):
@@ -383,15 +383,19 @@ client = None
 
 @app.get('/api/system/status')
 async def system_status(username: str = Depends(verify_credentials)):
+    active_version, git_info = await asyncio.gather(
+        asyncio.to_thread(get_active_version),
+        asyncio.to_thread(get_git_info),
+    )
     return {
-        'active_version': get_active_version(),
-        'git': get_git_info(),
+        'active_version': active_version,
+        'git': git_info,
     }
 
 
 @app.get('/api/telegram/status')
 async def telegram_status(username: str = Depends(verify_credentials)):
-    session_path = get_session_file()
+    session_path = await asyncio.to_thread(get_session_file)
     status = {
         'session_path': session_path,
         'connected': False,
@@ -399,7 +403,7 @@ async def telegram_status(username: str = Depends(verify_credentials)):
         'channel_ids': CHANNEL_IDS,
         'me': None,
     }
-    if client and client.is_connected():
+    if client and await client.is_connected():
         status['connected'] = True
         try:
             status['authorized'] = await client.is_user_authorized()
@@ -437,10 +441,15 @@ async def okx_status(username: str = Depends(verify_credentials)):
 
 @app.get('/api/okx/orders')
 async def okx_orders(
-    account: str = Query(...),
+    account: str = Query(default=None),
+    account_idx: int = Query(default=None),
     username: str = Depends(verify_credentials)
 ):
-    target = next((a for a in TEST_ACCOUNTS if a['account_name'] == account), None)
+    target = None
+    if account_idx is not None:
+        target = next((a for a in TEST_ACCOUNTS if a['account_idx'] == account_idx), None)
+    elif account is not None:
+        target = next((a for a in TEST_ACCOUNTS if a['account_name'] == account), None)
     if not target:
         raise HTTPException(status_code=404, detail='Account not found')
     orders = await get_recent_orders(target, limit=20)

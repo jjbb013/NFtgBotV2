@@ -103,7 +103,7 @@ async function loadOrders(accountName) {
         const data = await apiGet(`/api/okx/orders?account=${encodeURIComponent(accountName)}`);
         let html = '<table><tr><th>标的</th><th>方向</th><th>持仓方向</th><th>数量</th><th>均价</th><th>状态</th><th>时间</th></tr>';
         for (const o of data.orders) {
-            html += `<tr><td>${escapeHtml(o.instId)}</td><td>${escapeHtml(o.side)}</td><td>${escapeHtml(o.posSide)}</td><td>${escapeHtml(o.sz)}</td><td>${escapeHtml(o.avgPx)}</td><td>${escapeHtml(o.state)}</td><td>${escapeHtml(new Date(parseInt(o.cTime)).toLocaleString('zh-CN'))}</td></tr>`;
+            html += `<tr><td>${escapeHtml(o.instId)}</td><td>${escapeHtml(o.side)}</td><td>${escapeHtml(o.posSide)}</td><td>${escapeHtml(o.sz)}</td><td>${escapeHtml(o.avgPx)}</td><td>${escapeHtml(o.state)}</td><td>${escapeHtml(o.cTime ? new Date(parseInt(o.cTime)).toLocaleString('zh-CN') : '-')}</td></tr>`;
         }
         html += '</table>';
         container.innerHTML = html;

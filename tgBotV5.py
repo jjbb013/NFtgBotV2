@@ -351,7 +351,5 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
 async def dashboard(request: Request, username: str = Depends(verify_credentials)):
     return templates.TemplateResponse('dashboard.html', {
         'request': request,
-        'username': username,
-        'channel_ids': CHANNEL_IDS,
     })
 

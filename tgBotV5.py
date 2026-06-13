@@ -337,7 +337,11 @@ class StaticAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         if request.url.path.startswith('/static/'):
             try:
-                await security(request)
+                credentials = await security(request)
+                correct_username = secrets.compare_digest(credentials.username, DASHBOARD_USERNAME)
+                correct_password = secrets.compare_digest(credentials.password, DASHBOARD_PASSWORD)
+                if not (correct_username and correct_password):
+                    raise HTTPException(status_code=401)
             except HTTPException:
                 return Response(
                     'Unauthorized',

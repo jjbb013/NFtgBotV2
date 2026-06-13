@@ -189,7 +189,7 @@ async def get_usdt_balance(account):
             account['API_KEY'], account['SECRET_KEY'], account['PASSPHRASE'], False, account['FLAG']
         )
         resp = await asyncio.to_thread(acc_api.get_account_balance)
-        if resp.get('code') == '0':
+        if resp.get('code') == '0' and resp.get('data'):
             for detail in resp['data'][0].get('details', []):
                 if detail.get('ccy') == 'USDT':
                     return float(detail.get('availEq', 0))
@@ -206,25 +206,45 @@ async def get_recent_pnl(account, days=7):
         )
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
-        resp = await asyncio.to_thread(
-            acc_api.get_account_bills,
-            instType='SWAP',
-            mgnMode='cross',
-            begin=start.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
-            end=end.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
-            limit='100'
-        )
-        if resp.get('code') == '0':
-            total = 0.0
-            for item in resp.get('data', []):
+        start_ms = str(int(start.timestamp() * 1000))
+        end_ms = str(int(end.timestamp() * 1000))
+
+        total = 0.0
+        current_before = end_ms
+        while True:
+            resp = await asyncio.to_thread(
+                acc_api.get_account_bills,
+                instType='SWAP',
+                mgnMode='cross',
+                after=start_ms,
+                before=current_before,
+                limit='100'
+            )
+            if resp.get('code') != '0':
+                logger.error(f"[{account['account_name']}] 获取账单失败: {resp.get('msg')}")
+                return None
+
+            data = resp.get('data', [])
+            if not data:
+                break
+
+            for item in data:
                 pnl = item.get('pnl')
                 if pnl is not None:
                     try:
                         total += float(pnl)
                     except (ValueError, TypeError):
                         continue
-            return round(total, 4)
-        logger.error(f"[{account['account_name']}] 获取账单失败: {resp.get('msg')}")
+                # Move the pagination boundary to the oldest bill in this batch
+                bill_ts = item.get('billId') or item.get('ts')
+                if bill_ts:
+                    current_before = str(int(bill_ts) - 1)
+
+            # Safety stop: if we got fewer than limit, we've reached the end
+            if len(data) < 100:
+                break
+
+        return round(total, 4)
     except Exception as e:
         logger.error(f"[{account['account_name']}] 获取账单异常: {e}")
     return None

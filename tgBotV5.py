@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import sys
 import threading
@@ -50,4 +51,37 @@ def sanitize_log(line: str) -> str:
     for pattern, replacement in SENSITIVE_PATTERNS:
         line = pattern.sub(replacement, line)
     return line
+
+
+from dotenv import load_dotenv
+
+load_dotenv('.env')
+
+TG_API_ID = os.getenv('TG_API_ID')
+TG_API_HASH = os.getenv('TG_API_HASH')
+TG_LOG_GROUP_ID = os.getenv('TG_LOG_GROUP_ID')
+TG_CHANNEL_IDS = os.getenv('TG_CHANNEL_IDS', '')
+PATCH_MISSING_SIGNALS_INTERVAL = int(os.getenv('PATCH_MISSING_SIGNALS_INTERVAL', 30))
+HEALTH_CHECK_INTERVAL = int(os.getenv('HEALTH_CHECK_INTERVAL', 300))
+
+DASHBOARD_USERNAME = os.getenv('DASHBOARD_USERNAME')
+DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD')
+DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '8000'))
+
+if not all([TG_API_ID, TG_API_HASH, TG_CHANNEL_IDS]):
+    logger.error('关键环境变量 TG_API_ID, TG_API_HASH, TG_CHANNEL_IDS 未配置')
+    sys.exit(1)
+
+if not all([DASHBOARD_USERNAME, DASHBOARD_PASSWORD]):
+    logger.error('Web Dashboard 环境变量 DASHBOARD_USERNAME, DASHBOARD_PASSWORD 未配置')
+    sys.exit(1)
+
+TG_API_ID = int(TG_API_ID)
+TG_LOG_GROUP_ID = int(TG_LOG_GROUP_ID) if TG_LOG_GROUP_ID else None
+CHANNEL_IDS = [int(cid.strip()) for cid in TG_CHANNEL_IDS.split(',') if cid.strip()]
+
+DATA_DIR = os.getenv('DATA_DIR', './data')
+SESSION_DIR = os.getenv('SESSION_DIR', './data/sessions')
+os.makedirs(SESSION_DIR, exist_ok=True)
+LAST_SESSION_PATH_FILE = os.path.join(SESSION_DIR, '../last_session_path.txt')
 

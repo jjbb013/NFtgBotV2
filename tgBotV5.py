@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -275,4 +276,41 @@ async def get_recent_orders(account, limit=20):
     except Exception as e:
         logger.error(f"[{account['account_name']}] 获取历史订单异常: {e}")
     return []
+
+
+def get_git_info():
+    for cwd in ['/app', '.']:
+        try:
+            commit_hash = subprocess.check_output(
+                ['git', 'rev-parse', '--short', 'HEAD'], cwd=cwd, text=True
+            ).strip()
+            commit_msg = subprocess.check_output(
+                ['git', 'log', '-1', '--pretty=%s'], cwd=cwd, text=True
+            ).strip()
+            commit_time = subprocess.check_output(
+                ['git', 'log', '-1', '--pretty=%ci'], cwd=cwd, text=True
+            ).strip()
+            return {
+                'hash': commit_hash,
+                'message': commit_msg,
+                'time': commit_time,
+            }
+        except Exception:
+            continue
+    logger.warning('获取 git 信息失败')
+    return {'hash': 'unknown', 'message': 'unknown', 'time': 'unknown'}
+
+
+def get_active_version():
+    for path in ['/app/supervisord.conf', './supervisord.conf']:
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            match = re.search(r'command=python\s+\./(tgBotV\d+\.py)', content)
+            if match:
+                return match.group(1)
+        except Exception:
+            continue
+    logger.warning('读取 supervisord.conf 失败')
+    return 'unknown'
 

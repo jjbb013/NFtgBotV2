@@ -326,10 +326,29 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 import secrets
 
 app = FastAPI()
+
+
+class StaticAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.url.path.startswith('/static/'):
+            try:
+                await security(request)
+            except HTTPException:
+                return Response(
+                    'Unauthorized',
+                    status_code=401,
+                    headers={'WWW-Authenticate': 'Basic'}
+                )
+        return await call_next(request)
+
+
 security = HTTPBasic()
+app.add_middleware(StaticAuthMiddleware)
 
 templates = Jinja2Templates(directory='templates')
 app.mount('/static', StaticFiles(directory='static'), name='static')

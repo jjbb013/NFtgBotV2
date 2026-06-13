@@ -8,6 +8,10 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+function makeSafeId(name) {
+    return 'orders-' + String(name).replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
 function updateTime() {
     document.getElementById('current-time').textContent = new Date().toLocaleString('zh-CN');
 }
@@ -78,27 +82,28 @@ async function refreshOKXStatus() {
         const data = await apiGet('/api/okx/status');
         let html = '';
         for (const acc of data.accounts) {
+            const safeId = makeSafeId(acc.name);
             html += `
                 <div class="okx-card">
                     <h3>${escapeHtml(acc.name)}</h3>
                     <p>连接: ${acc.connected ? '正常' : '异常'}</p>
                     <p>USDT 余额: ${acc.balance !== null ? escapeHtml(acc.balance) : '获取失败'}</p>
                     <p>最近 7 天盈亏: ${acc.pnl !== null ? escapeHtml(acc.pnl) + ' USDT' : '获取失败'}</p>
-                    <button class="load-orders-btn" data-account="${escapeHtml(acc.name)}">查看最近 20 条订单</button>
-                    <div id="orders-${escapeHtml(acc.name)}"></div>
+                    <button class="load-orders-btn" data-account="${escapeHtml(acc.name)}" data-safe-id="${safeId}">查看最近 20 条订单</button>
+                    <div id="${safeId}"></div>
                 </div>
             `;
         }
         el.innerHTML = html || '没有配置 OKX 账户';
 
         document.querySelectorAll('.load-orders-btn').forEach(btn => {
-            btn.addEventListener('click', () => loadOrders(btn.dataset.account));
+            btn.addEventListener('click', () => loadOrders(btn.dataset.account, btn.dataset.safeId));
         });
     });
 }
 
-async function loadOrders(accountName) {
-    const container = document.getElementById(`orders-${escapeHtml(accountName)}`);
+async function loadOrders(accountName, safeId) {
+    const container = document.getElementById(safeId);
     try {
         const data = await apiGet(`/api/okx/orders?account=${encodeURIComponent(accountName)}`);
         let html = '<table><tr><th>标的</th><th>方向</th><th>持仓方向</th><th>数量</th><th>均价</th><th>状态</th><th>时间</th></tr>';

@@ -574,7 +574,7 @@ async def get_latest_market_price(symbol):
     return None
 
 
-async def convert_coin_to_contract_size(inst_id, px, sz, op_type, flag):
+async def convert_coin_to_contract_size(inst_id, px, sz, flag):
     """
     将币的数量转换为合约的张数。
     """
@@ -601,10 +601,11 @@ async def convert_coin_to_contract_size(inst_id, px, sz, op_type, flag):
 
 
 # --- Trading Functions (ported from tgBotV4, adapted for asyncio) ---
-async def place_okx_order(account, action, symbol, size):
+async def place_okx_order(account, action, symbol, size, price=None):
     try:
         api = Trade.TradeAPI(account['API_KEY'], account['SECRET_KEY'], account['PASSPHRASE'], False, account['FLAG'])
-        price = await get_latest_market_price(symbol)
+        if price is None:
+            price = await get_latest_market_price(symbol)
         if not price:
             return {"success": False, "error_msg": "无法获取市场价格"}
 
@@ -663,6 +664,24 @@ async def close_okx_position(account, symbol, close_type):
             logger.info(f"[{account['account_name']}] 未找到 {symbol} 的 {close_type} 方向持仓可供平仓。")
             return {"success": True, "close_results": [], "message": "没有找到可平仓位"}
 
+        total_upl = 0.0
+        total_upl_ratio = 0.0
+        valid_ratio_count = 0
+        for p in positions_to_close:
+            try:
+                upl = float(p.get('upl', 0) or 0)
+                total_upl += upl
+                upl_ratio = p.get('uplRatio')
+                if upl_ratio is not None:
+                    ratio_val = float(upl_ratio)
+                    if abs(ratio_val) < 1:
+                        ratio_val = ratio_val * 100
+                    total_upl_ratio += ratio_val
+                    valid_ratio_count += 1
+            except (ValueError, TypeError):
+                continue
+        pnl_pct = (total_upl_ratio / valid_ratio_count) if valid_ratio_count > 0 else None
+
         for pos in positions_to_close:
             pos_side_to_close = pos.get('posSide')
             side = 'sell' if pos_side_to_close == 'long' else 'buy'
@@ -683,7 +702,7 @@ async def close_okx_position(account, symbol, close_type):
                     'pos_side': pos_side_to_close, 'size': pos['pos'],
                     'error_msg': close_data.get('sMsg')
                 })
-        return {"success": True, "close_results": results, "okx_resp": resp}
+        return {"success": True, "close_results": results, "okx_resp": resp, "total_upl": total_upl, "pnl_pct": pnl_pct}
     except Exception as e:
         logger.error(f"平仓异常: {e}")
         return {"success": False, "error_msg": str(e)}
@@ -708,7 +727,7 @@ async def process_open_signal(action, symbol, msg_text):
 
         order_value = margin * leverage
         inst_id = f"{symbol.upper()}-USDT-SWAP"
-        converted_size = await convert_coin_to_contract_size(inst_id, price, order_value, "open", account['FLAG'])
+        converted_size = await convert_coin_to_contract_size(inst_id, price, order_value, account['FLAG'])
 
         if converted_size is None:
             logger.error(f"无法将币价值转换为合约张数，跳过下单。")
@@ -728,7 +747,7 @@ async def process_open_signal(action, symbol, msg_text):
         )
         logger.info(order_details)
 
-        result = await place_okx_order(account, action, symbol, size)
+        result = await place_okx_order(account, action, symbol, size, price)
 
         conversion_log = f"币张转换成功: {order_value:.4f} USDT 价值 转换为 {size:.4f} 张合约 ({inst_id})"
         full_log = f"{conversion_log}\n{order_details}"
@@ -740,16 +759,24 @@ async def process_open_signal(action, symbol, msg_text):
             else:
                 await client.send_message(TG_LOG_GROUP_ID, full_log)
 
-        bark_title = f"✅ {account['account_name']} {action} {symbol}"
-        bark_extra_info = (
-            f"止盈价格: {result.get('take_profit', 0):.4f}\n"
-            f"止损价格: {result.get('stop_loss', 0):.4f}\n"
-            f"客户订单ID: {result.get('clOrdId', '')}\n"
-            f"时间: {get_shanghai_time()}\n"
-            f"服务器响应代码: {result.get('okx_resp', {}).get('code', '')}\n"
-            f"服务器响应消息: {result.get('okx_resp', {}).get('msg', '')}"
-        )
-        bark_content = f"{full_log}\n{bark_extra_info}"
+        if result.get('success'):
+            bark_title = f"✅ {account['account_name']} {action} {symbol}"
+            bark_extra_info = (
+                f"止盈价格: {result.get('take_profit', 0):.4f}\n"
+                f"止损价格: {result.get('stop_loss', 0):.4f}\n"
+                f"客户订单ID: {result.get('clOrdId', '')}\n"
+                f"时间: {get_shanghai_time()}\n"
+                f"服务器响应代码: {result.get('okx_resp', {}).get('code', '')}\n"
+                f"服务器响应消息: {result.get('okx_resp', {}).get('msg', '')}"
+            )
+            bark_content = f"{full_log}\n{bark_extra_info}"
+        else:
+            bark_title = f"❌ {account['account_name']} {action} {symbol} 下单失败"
+            bark_content = (
+                f"{full_log}\n"
+                f"错误信息: {result.get('error_msg', '未知错误')}\n"
+                f"时间: {get_shanghai_time()}"
+            )
 
         await asyncio.to_thread(send_bark_notification, bark_title, bark_content)
 
@@ -763,7 +790,7 @@ async def process_open_signal(action, symbol, msg_text):
                 await client.send_message(TG_LOG_GROUP_ID, original_signal_log)
 
 
-def build_close_bark_content(close_type, symbol, account_name, close_results, okx_resp=None, error_msg=None):
+def build_close_bark_content(close_type, symbol, account_name, close_results, okx_resp=None, error_msg=None, total_upl=None, pnl_pct=None):
     now = get_shanghai_time()
     lines = [
         f"账户: {account_name}",
@@ -772,6 +799,13 @@ def build_close_bark_content(close_type, symbol, account_name, close_results, ok
         f"平仓结果: {len(close_results)} 个持仓",
         f"时间: {now}"
     ]
+    if total_upl is not None:
+        pnl_sign = "+" if total_upl >= 0 else ""
+        if pnl_pct is not None:
+            pct_sign = "+" if pnl_pct >= 0 else ""
+            lines.append(f"盈亏: {pnl_sign}{total_upl:.4f} USDT ({pct_sign}{pnl_pct:.2f}%)")
+        else:
+            lines.append(f"盈亏: {pnl_sign}{total_upl:.4f} USDT")
     if close_results:
         for res in close_results:
             lines.append(f"- {res['pos_side']}: {res['size']} (订单ID: {res['order_id']})")
@@ -797,7 +831,8 @@ async def process_close_signal(close_type, symbol, msg_text):
         bark_title = f"Tg信号策略平仓-{symbol}"
         content = build_close_bark_content(
             close_type, symbol, account['account_name'],
-            result.get('close_results', []), result.get('okx_resp'), result.get('error_msg')
+            result.get('close_results', []), result.get('okx_resp'), result.get('error_msg'),
+            result.get('total_upl'), result.get('pnl_pct')
         )
         full_log = f"{log_header}\n信号判断: 平仓 {close_type} {symbol} (账户: {account['account_name']})\n操作返回: {json.dumps(result, ensure_ascii=False, indent=2)}"
         logger.info(full_log)
@@ -815,15 +850,16 @@ async def process_close_signal(close_type, symbol, msg_text):
 async def handler(event):
     msg_text = event.message.text or ''
 
-    if TG_LOG_GROUP_ID:
-        forward_msg = f"【消息监听】频道:{event.chat_id}\n时间: {get_shanghai_time()}\n内容: {msg_text}"
-        await client.send_message(TG_LOG_GROUP_ID, forward_msg)
-
     async with signal_lock:
         if event.id in PROCESSED_MESSAGE_IDS.get(event.chat_id, set()):
             return
         PROCESSED_MESSAGE_IDS.setdefault(event.chat_id, set()).add(event.id)
         save_processed_ids(PROCESSED_MESSAGE_IDS)
+
+        if TG_LOG_GROUP_ID:
+            forward_msg = f"【消息监听】频道:{event.chat_id}\n时间: {get_shanghai_time()}\n内容: {msg_text}"
+            await client.send_message(TG_LOG_GROUP_ID, forward_msg)
+
         action, symbol = extract_trade_info(msg_text)
         if action and symbol:
             await process_open_signal(action, symbol, msg_text)
@@ -887,7 +923,7 @@ async def set_leverage_for_all_accounts():
     logger.info("正在为所有账户设置杠杆...")
     for account in TEST_ACCOUNTS:
         leverage = os.getenv(f"OKX{account['account_idx']}_LEVERAGE", "10")
-        for symbol in ["BTC-USDT-SWAP", "ETH-USDT-SWAP"]:
+        for symbol in ["BTC-USDT-SWAP", "ETH-USDT-SWAP", "DOGE-USDT-SWAP", "SOL-USDT-SWAP"]:
             try:
                 result = await asyncio.to_thread(
                     set_account_leverage,

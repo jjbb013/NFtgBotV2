@@ -33,4 +33,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger('tgBotV5')
 
+import re
+
+SENSITIVE_PATTERNS = [
+    (re.compile(r'\+?1?\d{9,15}'), '***PHONE***'),
+    (re.compile(r'api[_-]?key\s*[:=]\s*["\']?[a-zA-Z0-9_-]+["\']?', re.IGNORECASE), 'api_key=***'),
+    (re.compile(r'secret[_-]?key\s*[:=]\s*["\']?[a-zA-Z0-9_-]+["\']?', re.IGNORECASE), 'secret_key=***'),
+    (re.compile(r'passphrase\s*[:=]\s*["\']?[^"\'\s]+["\']?', re.IGNORECASE), 'passphrase=***'),
+    (re.compile(r'password\s*[:=]\s*["\']?[^"\'\s]+["\']?', re.IGNORECASE), 'password=***'),
+    (re.compile(r'code\s*[:=]\s*["\']?\d{5,6}["\']?', re.IGNORECASE), 'code=***'),
+    (re.compile(r'bark[_-]?key\s*[:=]\s*["\']?[a-zA-Z0-9_-]+["\']?', re.IGNORECASE), 'bark_key=***'),
+]
+
+def sanitize_log(line: str) -> str:
+    for pattern, replacement in SENSITIVE_PATTERNS:
+        line = pattern.sub(replacement, line)
+    return line
+
 

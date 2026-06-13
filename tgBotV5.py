@@ -204,22 +204,16 @@ async def get_recent_pnl(account, days=7):
         acc_api = Account.AccountAPI(
             account['API_KEY'], account['SECRET_KEY'], account['PASSPHRASE'], False, account['FLAG']
         )
-        end = datetime.now(timezone.utc)
-        start = end - timedelta(days=days)
-        start_ms = str(int(start.timestamp() * 1000))
-        end_ms = str(int(end.timestamp() * 1000))
+        start = datetime.now(timezone.utc) - timedelta(days=days)
+        start_ms = int(start.timestamp() * 1000)
 
         total = 0.0
-        current_before = end_ms
+        before = None
         while True:
-            resp = await asyncio.to_thread(
-                acc_api.get_account_bills,
-                instType='SWAP',
-                mgnMode='cross',
-                after=start_ms,
-                before=current_before,
-                limit='100'
-            )
+            kwargs = {'instType': 'SWAP', 'mgnMode': 'cross', 'limit': '100'}
+            if before:
+                kwargs['before'] = before
+            resp = await asyncio.to_thread(acc_api.get_account_bills, **kwargs)
             if resp.get('code') != '0':
                 logger.error(f"[{account['account_name']}] 获取账单失败: {resp.get('msg')}")
                 return None
@@ -228,20 +222,24 @@ async def get_recent_pnl(account, days=7):
             if not data:
                 break
 
+            reached_time_limit = False
             for item in data:
+                ts = int(item.get('ts', 0))
+                if ts < start_ms:
+                    reached_time_limit = True
+                    break
                 pnl = item.get('pnl')
                 if pnl is not None:
                     try:
                         total += float(pnl)
                     except (ValueError, TypeError):
                         continue
-                # Move the pagination boundary to the oldest bill in this batch
-                bill_ts = item.get('billId') or item.get('ts')
-                if bill_ts:
-                    current_before = str(int(bill_ts) - 1)
 
-            # Safety stop: if we got fewer than limit, we've reached the end
-            if len(data) < 100:
+            if reached_time_limit:
+                break
+
+            before = data[-1].get('billId')
+            if not before:
                 break
 
         return round(total, 4)

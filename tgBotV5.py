@@ -36,12 +36,12 @@ logger = logging.getLogger('tgBotV5')
 
 SENSITIVE_PATTERNS = [
     (re.compile(r'(?<!\d)\+\d{7,15}(?!\d)'), '***PHONE***'),
-    (re.compile(r'(?<![a-zA-Z])api[_-]?key\s*[:=]\s*["\']?[a-zA-Z0-9_-]+["\']?', re.IGNORECASE), 'api_key=***'),
-    (re.compile(r'(?<![a-zA-Z])secret[_-]?key\s*[:=]\s*["\']?[a-zA-Z0-9_-]+["\']?', re.IGNORECASE), 'secret_key=***'),
+    (re.compile(r'(?<![a-zA-Z])api[_-]?key\s*[:=]\s*["\']?[^"\'\s]+["\']?', re.IGNORECASE), 'api_key=***'),
+    (re.compile(r'(?<![a-zA-Z])secret[_-]?key\s*[:=]\s*["\']?[^"\'\s]+["\']?', re.IGNORECASE), 'secret_key=***'),
     (re.compile(r'(?<![a-zA-Z])passphrase\s*[:=]\s*["\']?[^"\'\s]+["\']?', re.IGNORECASE), 'passphrase=***'),
     (re.compile(r'(?<![a-zA-Z])password\s*[:=]\s*["\']?[^"\'\s]+["\']?', re.IGNORECASE), 'password=***'),
     (re.compile(r'(?<![a-zA-Z])api[_-]?hash\s*[:=]\s*["\']?[a-zA-Z0-9]+["\']?', re.IGNORECASE), 'api_hash=***'),
-    (re.compile(r'(?<![a-zA-Z])bark[_-]?key\s*[:=]\s*["\']?[a-zA-Z0-9_-]+["\']?', re.IGNORECASE), 'bark_key=***'),
+    (re.compile(r'(?<![a-zA-Z])bark[_-]?key\s*[:=]\s*["\']?[^"\'\s]+["\']?', re.IGNORECASE), 'bark_key=***'),
     (re.compile(r'(?:verification|verify|auth|otp|telegram|login)\s+code\s*[:=]\s*["\']?\d{5,6}["\']?', re.IGNORECASE), 'code=***'),
 ]
 
@@ -50,5 +50,4 @@ def sanitize_log(line: str) -> str:
     for pattern, replacement in SENSITIVE_PATTERNS:
         line = pattern.sub(replacement, line)
     return line
-
 

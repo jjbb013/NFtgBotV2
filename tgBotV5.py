@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import threading
+import time
 from collections import deque
 
 
@@ -106,4 +107,56 @@ DATA_DIR = os.getenv('DATA_DIR', './data')
 SESSION_DIR = os.getenv('SESSION_DIR', './data/sessions')
 os.makedirs(SESSION_DIR, exist_ok=True)
 LAST_SESSION_PATH_FILE = os.path.join(DATA_DIR, 'last_session_path.txt')
+
+
+def get_session_file():
+    if os.path.exists(LAST_SESSION_PATH_FILE):
+        with open(LAST_SESSION_PATH_FILE, 'r', encoding='utf-8') as f:
+            session_path = f.read().strip()
+            logger.info(f'自动复用上次 session 文件: {session_path}')
+            return session_path
+
+    sessions = [f for f in os.listdir(SESSION_DIR) if f.endswith('.session')]
+    if not sessions:
+        logger.info('未检测到 session 文件，将新建登录')
+        new_session = os.path.join(SESSION_DIR, f'session_{int(time.time())}.session')
+        with open(LAST_SESSION_PATH_FILE, 'w', encoding='utf-8') as f:
+            f.write(new_session)
+        return new_session
+
+    logger.info('检测到以下 Telegram session 文件：')
+    for idx, s in enumerate(sessions):
+        logger.info(f'{idx+1}: {s}')
+
+    if not sys.stdout.isatty():
+        logger.info("非交互式环境，自动选择第一个 session")
+        choice = '1'
+    else:
+        choice = input('请选择要使用的 session 文件编号，或输入 n 新建登录: ')
+
+    if choice.isdigit() and 1 <= int(choice) <= len(sessions):
+        session_path = os.path.join(SESSION_DIR, sessions[int(choice)-1])
+    else:
+        session_path = os.path.join(SESSION_DIR, f'session_{int(time.time())}.session')
+
+    with open(LAST_SESSION_PATH_FILE, 'w', encoding='utf-8') as f:
+        f.write(session_path)
+    return session_path
+
+
+def get_test_accounts():
+    accounts = []
+    for i in range(1, 6):
+        prefix = f'OKX{i}_'
+        if all(os.getenv(prefix + k) for k in ['API_KEY', 'SECRET_KEY', 'PASSPHRASE']):
+            account_name = os.getenv(f'OKX{i}_ACCOUNT_NAME', f'OKX{i}')
+            accounts.append({
+                'account_idx': i, 'account_name': account_name,
+                'API_KEY': os.getenv(prefix + 'API_KEY'),
+                'SECRET_KEY': os.getenv(prefix + 'SECRET_KEY'),
+                'PASSPHRASE': os.getenv(prefix + 'PASSPHRASE'),
+                'FLAG': os.getenv(prefix + 'FLAG', '0')
+            })
+    logger.info(f"共加载 {len(accounts)} 个有效OKX账户")
+    return accounts
 

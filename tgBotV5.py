@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -163,4 +164,97 @@ def get_test_accounts():
             })
     logger.info(f"共加载 {len(accounts)} 个有效OKX账户")
     return accounts
+
+
+from datetime import datetime, timedelta, timezone
+import okx.Account as Account
+import okx.Trade as Trade
+import okx.MarketData as MarketData
+
+async def get_okx_connection_status(account):
+    try:
+        acc_api = Account.AccountAPI(
+            account['API_KEY'], account['SECRET_KEY'], account['PASSPHRASE'], False, account['FLAG']
+        )
+        resp = await asyncio.to_thread(acc_api.get_account_balance)
+        return resp.get('code') == '0'
+    except Exception as e:
+        logger.error(f"[{account['account_name']}] OKX 连接检查异常: {e}")
+        return False
+
+
+async def get_usdt_balance(account):
+    try:
+        acc_api = Account.AccountAPI(
+            account['API_KEY'], account['SECRET_KEY'], account['PASSPHRASE'], False, account['FLAG']
+        )
+        resp = await asyncio.to_thread(acc_api.get_account_balance)
+        if resp.get('code') == '0':
+            for detail in resp['data'][0].get('details', []):
+                if detail.get('ccy') == 'USDT':
+                    return float(detail.get('availEq', 0))
+        logger.error(f"[{account['account_name']}] 获取余额失败: {resp.get('msg')}")
+    except Exception as e:
+        logger.error(f"[{account['account_name']}] 获取余额异常: {e}")
+    return None
+
+
+async def get_recent_pnl(account, days=7):
+    try:
+        acc_api = Account.AccountAPI(
+            account['API_KEY'], account['SECRET_KEY'], account['PASSPHRASE'], False, account['FLAG']
+        )
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=days)
+        resp = await asyncio.to_thread(
+            acc_api.get_account_bills,
+            instType='SWAP',
+            mgnMode='cross',
+            begin=start.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
+            end=end.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
+            limit='100'
+        )
+        if resp.get('code') == '0':
+            total = 0.0
+            for item in resp.get('data', []):
+                pnl = item.get('pnl')
+                if pnl is not None:
+                    try:
+                        total += float(pnl)
+                    except (ValueError, TypeError):
+                        continue
+            return round(total, 4)
+        logger.error(f"[{account['account_name']}] 获取账单失败: {resp.get('msg')}")
+    except Exception as e:
+        logger.error(f"[{account['account_name']}] 获取账单异常: {e}")
+    return None
+
+
+async def get_recent_orders(account, limit=20):
+    try:
+        trade_api = Trade.TradeAPI(
+            account['API_KEY'], account['SECRET_KEY'], account['PASSPHRASE'], False, account['FLAG']
+        )
+        resp = await asyncio.to_thread(
+            trade_api.get_orders_history,
+            instType='SWAP',
+            limit=str(limit)
+        )
+        if resp.get('code') == '0':
+            orders = []
+            for item in resp.get('data', []):
+                orders.append({
+                    'instId': item.get('instId'),
+                    'side': item.get('side'),
+                    'posSide': item.get('posSide'),
+                    'sz': item.get('sz'),
+                    'avgPx': item.get('avgPx'),
+                    'state': item.get('state'),
+                    'cTime': item.get('cTime'),
+                })
+            return orders
+        logger.error(f"[{account['account_name']}] 获取历史订单失败: {resp.get('msg')}")
+    except Exception as e:
+        logger.error(f"[{account['account_name']}] 获取历史订单异常: {e}")
+    return []
 

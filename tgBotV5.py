@@ -281,23 +281,22 @@ async def get_recent_orders(account, limit=20):
 def get_git_info():
     for cwd in ['/app', '.']:
         try:
+            kwargs = {'cwd': cwd, 'text': True, 'timeout': 5}
             commit_hash = subprocess.check_output(
-                ['git', 'rev-parse', '--short', 'HEAD'], cwd=cwd, text=True
+                ['git', 'rev-parse', '--short', 'HEAD'], **kwargs
             ).strip()
             commit_msg = subprocess.check_output(
-                ['git', 'log', '-1', '--pretty=%s'], cwd=cwd, text=True
+                ['git', 'log', '-1', '--pretty=%s'], **kwargs
             ).strip()
             commit_time = subprocess.check_output(
-                ['git', 'log', '-1', '--pretty=%ci'], cwd=cwd, text=True
+                ['git', 'log', '-1', '--pretty=%ci'], **kwargs
             ).strip()
-            return {
-                'hash': commit_hash,
-                'message': commit_msg,
-                'time': commit_time,
-            }
-        except Exception:
+            return {'hash': commit_hash, 'message': commit_msg, 'time': commit_time}
+        except (subprocess.CalledProcessError, FileNotFoundError,
+                OSError, subprocess.TimeoutExpired) as e:
+            logger.debug(f'无法从 {cwd} 获取 git 信息: {e}')
             continue
-    logger.warning('获取 git 信息失败')
+    logger.warning('获取 git 信息失败，未找到可用的 git 仓库')
     return {'hash': 'unknown', 'message': 'unknown', 'time': 'unknown'}
 
 
@@ -306,11 +305,18 @@ def get_active_version():
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            match = re.search(r'command=python\s+\./(tgBotV\d+\.py)', content)
+            match = re.search(
+                r'command\s*=\s*(?:[/\w.-]+)?python3?\b'
+                r'(?:\s+-\S+)*\s+\S*/?(tgBotV\d+\.py)',
+                content,
+                re.IGNORECASE,
+            )
             if match:
                 return match.group(1)
-        except Exception:
+        except (FileNotFoundError, PermissionError,
+                IsADirectoryError, UnicodeDecodeError) as e:
+            logger.debug(f'读取 supervisord.conf 失败: {path}: {e}')
             continue
-    logger.warning('读取 supervisord.conf 失败')
+    logger.warning('未在 supervisord.conf 中找到有效的 tgBotV 启动命令')
     return 'unknown'
 

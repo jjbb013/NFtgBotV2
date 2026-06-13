@@ -113,8 +113,10 @@ def get_session_file():
     if os.path.exists(LAST_SESSION_PATH_FILE):
         with open(LAST_SESSION_PATH_FILE, 'r', encoding='utf-8') as f:
             session_path = f.read().strip()
+        if session_path and os.path.exists(session_path):
             logger.info(f'自动复用上次 session 文件: {session_path}')
             return session_path
+        logger.warning('上次记录的 session 文件已不存在或无效，将重新选择')
 
     sessions = [f for f in os.listdir(SESSION_DIR) if f.endswith('.session')]
     if not sessions:
@@ -137,6 +139,8 @@ def get_session_file():
     if choice.isdigit() and 1 <= int(choice) <= len(sessions):
         session_path = os.path.join(SESSION_DIR, sessions[int(choice)-1])
     else:
+        if choice.lower() != 'n':
+            logger.info('输入无效，将新建登录')
         session_path = os.path.join(SESSION_DIR, f'session_{int(time.time())}.session')
 
     with open(LAST_SESSION_PATH_FILE, 'w', encoding='utf-8') as f:
@@ -149,7 +153,7 @@ def get_test_accounts():
     for i in range(1, 6):
         prefix = f'OKX{i}_'
         if all(os.getenv(prefix + k) for k in ['API_KEY', 'SECRET_KEY', 'PASSPHRASE']):
-            account_name = os.getenv(f'OKX{i}_ACCOUNT_NAME', f'OKX{i}')
+            account_name = os.getenv(f'OKX{i}_ACCOUNT_NAME', f'OKX{i}').strip()
             accounts.append({
                 'account_idx': i, 'account_name': account_name,
                 'API_KEY': os.getenv(prefix + 'API_KEY'),

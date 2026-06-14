@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+import uvicorn
 from collections import deque
 
 import json
@@ -385,8 +386,8 @@ async def dashboard(request: Request, username: str = Depends(verify_credentials
     })
 
 
-# Global Telegram client
-client = TelegramClient(get_session_file(), TG_API_ID, TG_API_HASH)
+# Global Telegram client (initialized in main())
+client = None
 
 
 @app.get('/api/system/status')
@@ -870,7 +871,6 @@ async def process_close_signal(close_type, symbol, msg_text):
 
 
 # --- Message Handler and Background Tasks (ported from tgBotV4) ---
-@client.on(events.NewMessage(chats=CHANNEL_IDS))
 async def handler(event):
     msg_text = event.message.text or ''
 
@@ -1154,3 +1154,44 @@ async def _telegram_login_password(req: PasswordRequest):
         logger.error(f'二步验证失败: {e}')
         await cleanup_login(temp_client)
         return {'success': False, 'error': str(e)}
+
+
+# --- Application Entry Point ---
+async def main():
+    global client
+    session_file = await asyncio.to_thread(get_session_file)
+    client = TelegramClient(session_file, TG_API_ID, TG_API_HASH)
+
+    try:
+        await client.start()
+        logger.info(f'已登录 Telegram，监听频道: {CHANNEL_IDS}')
+
+        # Register Telegram message handler
+        client.on(events.NewMessage(chats=CHANNEL_IDS))(handler)
+
+        await init_processed_ids()
+        await set_leverage_for_all_accounts()
+        await send_startup_symbol_prices()
+        await start_background_tasks()
+
+        logger.info('机器人启动完成，Web Dashboard 将在 %s 端口启动', DASHBOARD_PORT)
+    except Exception as e:
+        logger.error(f'Telegram 客户端启动失败: {e}')
+        logger.info('请通过 Web Dashboard 的重新登录功能完成 Telegram 登录')
+    config = uvicorn.Config(
+        app,
+        host='0.0.0.0',
+        port=DASHBOARD_PORT,
+        workers=1,
+        loop='asyncio',
+        log_config=None,
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info('程序退出。')

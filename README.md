@@ -5,7 +5,23 @@
 
 ## 主要功能与版本历史
 
-### v4 版本 (当前)
+### v5 版本 (当前)
+
+- **主程序**: `tgBotV5.py`
+- **核心改进**:
+    - 新增 Web Dashboard，可通过 Northflank 公开端口查看运行状态。
+    - 支持在网页上查看 Telegram 登录/监听状态、OKX 账户状态、历史盈亏、历史订单。
+    - 支持在网页上直接重新登录 Telegram。
+    - 支持在网页上查看最近 100 条运行日志（自动隐藏敏感信息）。
+    - `tgBotV4.py` 保留作为 fallback。
+
+#### v5 新增环境变量
+
+- `DASHBOARD_USERNAME`: Web Dashboard 登录用户名（必填）。
+- `DASHBOARD_PASSWORD`: Web Dashboard 登录密码（必填）。
+- `DASHBOARD_PORT`: Web Dashboard 端口，默认 `8000`。
+
+### v4 版本
 
 - **主程序**: `tgBotV4.py`
 - **核心改进**:
@@ -20,21 +36,21 @@
 2.  **新增平仓逻辑**:
     *   增加了对 "MA止损" 关键词的识别。当信号中包含此关键词时，机器人将对指定交易对执行 **双向平仓**（无论持有多仓还是空仓，都将平掉）。
 
-### 如何切换回 v2 版本
+### 如何切换版本
 
-如果您需要运行旧版 (`tgBotV2.py`)，请修改 `supervisord.conf` 文件：
+当前 `supervisord.conf` 默认运行 `tgBotV5.py`。如果需要运行旧版，请修改 `supervisord.conf`：
 
 ```ini
-[program:tgBotV3]
-command=python ./tgBotV3.py
+[program:tgBotV5]
+command=python ./tgBotV5.py
 ...
 ```
 
-修改为:
+例如切换回 v4:
 
 ```ini
-[program:tgBotV2]
-command=python ./tgBotV2.py
+[program:tgBotV4]
+command=python ./tgBotV4.py
 ...
 ```
 
@@ -85,6 +101,9 @@ DATA_DIR=/data
 ### 其他可选环境变量
 - `PATCH_MISSING_SIGNALS_INTERVAL`: 历史信号补单检查间隔（秒），默认 `30`。
 - `HEALTH_CHECK_INTERVAL`: 主程序健康检查间隔（秒），默认 `300`。
+- `DASHBOARD_USERNAME`: Web Dashboard 登录用户名（v5 必填）。
+- `DASHBOARD_PASSWORD`: Web Dashboard 登录密码（v5 必填）。
+- `DASHBOARD_PORT`: Web Dashboard 端口，默认 `8000`。
 
 ### v3 版本历史环境变量
 
@@ -114,5 +133,8 @@ DATA_DIR=/data
 *   `OKX1_SL_RATIO`
 *   `PATCH_MISSING_SIGNALS_INTERVAL`
 *   `HEALTH_CHECK_INTERVAL`
+*   `DASHBOARD_USERNAME`  **(v5 新增)**
+*   `DASHBOARD_PASSWORD`  **(v5 新增)**
+*   `DASHBOARD_PORT`      **(v5 新增，可选)**
 
 请根据您的实际情况配置这些变量。

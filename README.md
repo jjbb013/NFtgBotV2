@@ -101,6 +101,7 @@ DATA_DIR=/data
 ### 其他可选环境变量
 - `PATCH_MISSING_SIGNALS_INTERVAL`: 历史信号补单检查间隔（秒），默认 `30`。
 - `HEALTH_CHECK_INTERVAL`: 主程序健康检查间隔（秒），默认 `300`。
+- `TELEGRAM_START_TIMEOUT`: Telegram 客户端启动超时时间（秒），默认 `60`。超时时程序仍会启动 Web Dashboard，方便通过网页重新登录。
 - `DASHBOARD_USERNAME`: Web Dashboard 登录用户名（v5 必填）。
 - `DASHBOARD_PASSWORD`: Web Dashboard 登录密码（v5 必填）。
 - `DASHBOARD_PORT`: Web Dashboard 端口，默认 `8000`。

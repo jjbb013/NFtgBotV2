@@ -217,6 +217,7 @@ chmod +x start.sh
 | `SESSION_DIR` | `./data/sessions` | session 文件目录 |
 | `PATCH_MISSING_SIGNALS_INTERVAL` | `30` | 历史消息补单检查间隔（秒）|
 | `HEALTH_CHECK_INTERVAL` | `300` | Telegram 连接健康检查间隔（秒）|
+| `TELEGRAM_START_TIMEOUT` | `60` | Telegram 客户端启动超时时间（秒），超时时仍启动 Web Dashboard 以便网页重新登录 |
 
 ---
 

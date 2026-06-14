@@ -87,6 +87,7 @@ TG_LOG_GROUP_ID = os.getenv('TG_LOG_GROUP_ID')
 TG_CHANNEL_IDS = os.getenv('TG_CHANNEL_IDS', '')
 PATCH_MISSING_SIGNALS_INTERVAL = _int_env('PATCH_MISSING_SIGNALS_INTERVAL', '30')
 HEALTH_CHECK_INTERVAL = _int_env('HEALTH_CHECK_INTERVAL', '300')
+TELEGRAM_START_TIMEOUT = _int_env('TELEGRAM_START_TIMEOUT', '60')
 
 DASHBOARD_USERNAME = os.getenv('DASHBOARD_USERNAME')
 DASHBOARD_PASSWORD = os.getenv('DASHBOARD_PASSWORD')
@@ -1163,7 +1164,7 @@ async def main():
     client = TelegramClient(session_file, TG_API_ID, TG_API_HASH)
 
     try:
-        await client.start()
+        await asyncio.wait_for(client.start(), timeout=TELEGRAM_START_TIMEOUT)
         logger.info(f'已登录 Telegram，监听频道: {CHANNEL_IDS}')
 
         # Register Telegram message handler

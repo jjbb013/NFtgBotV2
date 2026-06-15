@@ -1158,12 +1158,12 @@ async def _telegram_login_password(req: PasswordRequest):
 
 
 # --- Application Entry Point ---
-async def main():
+async def start_telegram_client():
+    """后台初始化 Telegram 客户端；失败时保留 Web Dashboard 可用。"""
     global client
-    session_file = await asyncio.to_thread(get_session_file)
-    client = TelegramClient(session_file, TG_API_ID, TG_API_HASH)
-
     try:
+        session_file = await asyncio.to_thread(get_session_file)
+        client = TelegramClient(session_file, TG_API_ID, TG_API_HASH)
         await asyncio.wait_for(client.start(), timeout=TELEGRAM_START_TIMEOUT)
         logger.info(f'已登录 Telegram，监听频道: {CHANNEL_IDS}')
 
@@ -1175,10 +1175,13 @@ async def main():
         await send_startup_symbol_prices()
         await start_background_tasks()
 
-        logger.info('机器人启动完成，Web Dashboard 将在 %s 端口启动', DASHBOARD_PORT)
+        logger.info('Telegram 客户端初始化完成')
     except Exception as e:
         logger.error(f'Telegram 客户端启动失败: {e}')
         logger.info('请通过 Web Dashboard 的重新登录功能完成 Telegram 登录')
+
+
+async def main():
     config = uvicorn.Config(
         app,
         host='0.0.0.0',
@@ -1188,7 +1191,18 @@ async def main():
         log_config=None,
     )
     server = uvicorn.Server(config)
+
+    # 先启动 Web Dashboard，让 Northflank 立刻有端口可探测；
+    # Telegram 登录在后台进行，失败也不影响 Dashboard。
+    telegram_task = asyncio.create_task(start_telegram_client())
+    logger.info('Web Dashboard 将在 %s 端口启动', DASHBOARD_PORT)
     await server.serve()
+    if not telegram_task.done():
+        telegram_task.cancel()
+        try:
+            await telegram_task
+        except asyncio.CancelledError:
+            pass
 
 
 if __name__ == '__main__':

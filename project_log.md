@@ -1,5 +1,22 @@
 # 项目日志与规范（project_log.md）
 
+## v5 更新
+
+1. **新增 Web Dashboard**：
+   - 通过 FastAPI 提供 `/` 页面，使用 HTTP Basic Auth 保护。
+   - 展示 Telegram 登录状态、监听频道、OKX 账户余额/盈亏/历史订单。
+   - 展示最近 100 条运行日志，自动隐藏敏感信息。
+   - 支持网页端 Telegram 重新登录。
+2. **架构调整**：
+   - `tgBotV5.py` 单进程同时运行 Telegram 监听和 Web 服务，共享 asyncio 事件循环。
+   - OKX SDK 调用放入线程池，避免阻塞事件循环。
+   - `tgBotV4.py` 保留作为 fallback。
+3. **新增环境变量**：
+   - `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`：Web Dashboard 登录凭证。
+   - `DASHBOARD_PORT`：Web Dashboard 端口，默认 `8000`。
+
+---
+
 ## 一、项目核心功能
 
 1. **多账户支持**：支持遍历所有配置账户，分别处理信号、下单、日志推送等操作。
@@ -13,7 +30,7 @@
 
 ## 二、代码风格与结构
 
-- **文件精简**：仅保留 `tgBotV2.py`（主逻辑）、`utils.py`（工具函数）、`requirements.txt`、`supervisord.conf`、`start.sh`、`Dockerfile`、`data/sessions`、`logs`、`processed_message_ids.json`、`README.md` 等核心文件。
+- **文件精简**：核心逻辑集中在 `tgBotV5.py`，工具函数放入 `utils.py`，并新增 `templates/dashboard.html`、`static/dashboard.css`、`static/dashboard.js` 用于 Web Dashboard。
 - **函数命名**：统一使用小写加下划线（snake_case），如 `set_account_leverage`。
 - **日志与消息格式**：所有推送消息结构化，包含时间、账户、标的、价格/信号/下单参数等关键信息。
 - **环境变量管理**：通过 `.env` 文件或 Docker `--env-file` 参数注入，所有敏感/可变参数均用环境变量管理。

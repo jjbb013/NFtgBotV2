@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}登录 Telegram | TgBot Lite{% endblock %}
+{% block content %}
+<h1>Telegram 登录</h1>
+<div>
+    <input id="phone" placeholder="手机号 (+86138...)" type="text">
+    <button onclick="startLogin()">发送验证码</button>
+</div>
+<div>
+    <input id="code" placeholder="验证码" type="text">
+    <button onclick="confirmLogin()">确认登录</button>
+</div>
+<pre id="result"></pre>
+<script>
+let phoneCodeHash = '';
+async function startLogin() {
+    const phone = document.getElementById('phone').value;
+    const res = await fetch('/api/login/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({phone}),
+    });
+    const data = await res.json();
+    phoneCodeHash = data.phone_code_hash || '';
+    document.getElementById('result').innerText = JSON.stringify(data, null, 2);
+}
+async function confirmLogin() {
+    const phone = document.getElementById('phone').value;
+    const code = document.getElementById('code').value;
+    const res = await fetch('/api/login/confirm', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({phone, code}),
+    });
+    const data = await res.json();
+    document.getElementById('result').innerText = JSON.stringify(data, null, 2);
+}
+</script>
+{% endblock %}

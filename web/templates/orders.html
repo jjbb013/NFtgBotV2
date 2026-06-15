@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}订单 | TgBot Lite{% endblock %}
+{% block content %}
+<h1>最近订单</h1>
+<p>选择账户和标的后实时查询 OKX。</p>
+<div id="orders">加载中...</div>
+<script>
+async function load() {
+    const params = new URLSearchParams({account_idx: '1', symbol: 'BTC'});
+    const res = await fetch('/api/orders?' + params);
+    const data = await res.json();
+    document.getElementById('orders').innerText = JSON.stringify(data, null, 2);
+}
+load();
+</script>
+{% endblock %}

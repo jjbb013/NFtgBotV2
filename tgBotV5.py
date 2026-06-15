@@ -6,7 +6,8 @@ import subprocess
 import sys
 import threading
 import time
-import uvicorn
+from hypercorn.config import Config
+from hypercorn.asyncio import serve
 from collections import deque
 
 import json
@@ -1188,21 +1189,15 @@ async def start_telegram_client():
 
 
 async def main():
-    config = uvicorn.Config(
-        app,
-        host='0.0.0.0',
-        port=DASHBOARD_PORT,
-        workers=1,
-        loop='asyncio',
-        log_config=None,
-    )
-    server = uvicorn.Server(config)
+    config = Config()
+    config.bind = [f'0.0.0.0:{DASHBOARD_PORT}']
+    config.worker_class = 'asyncio'
 
     # 先启动 Web Dashboard，让 Northflank 立刻有端口可探测；
     # Telegram 登录在后台进行，失败也不影响 Dashboard。
     telegram_task = asyncio.create_task(start_telegram_client())
     logger.info('Web Dashboard 将在 %s 端口启动', DASHBOARD_PORT)
-    await server.serve()
+    await serve(app, config)
     if not telegram_task.done():
         telegram_task.cancel()
         try:

@@ -8,7 +8,8 @@ python-okx         # OKX官方API库
 sqlalchemy  # SQL数据库ORM
 fastapi     # Web API框架
 jinja2      # Jinja2 模板引擎（FastAPI 模板依赖）
-uvicorn     # ASGI服务器
+uvicorn     # ASGI服务器（本地开发备用）
+hypercorn   # ASGI服务器（支持 HTTP/2，用于 Northflank）
 python-multipart  # 文件上传支持
 
 # 可选依赖

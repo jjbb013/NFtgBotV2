@@ -87,3 +87,43 @@
 
 - **所有新功能、风格变更、日志格式调整，需同步更新本文件。**
 - **如有疑问，优先查阅本文件，保持团队风格统一。**
+
+---
+
+## 六、tgBot Lite 重构记录（2026-06-16）
+
+### 重构目标
+
+- 轻量化、模块化、适配 Northflank PaaS，保留轻量 Dashboard。
+
+### 主要变更
+
+1. **删除历史文件**：`tgBotV2.py`、`tgBotV3.py`、`tgBotV4.py`、`okx_account.py`、`utils.py`、`supervisord.conf`、`start.sh`。
+2. **新增模块**：
+   - `config.py`：统一环境变量管理。
+   - `db.py`：MongoDB 持久化。
+   - `core/helpers.py`、`core/account.py`、`core/signals.py`、`core/processor.py`：职责分离。
+   - `telegram_client.py`：Telethon 客户端 + 网页登录向导。
+   - `web/app.py` + `templates/` + `static/`：FastAPI Dashboard。
+   - `main.py`：uvicorn 入口。
+3. **持久化方式**：
+   - Telegram 使用 `StringSession`，session 字符串存入 MongoDB。
+   - 已处理消息 ID 存入 MongoDB。
+   - 不再依赖 Volume / `DATA_DIR`。
+4. **启动方式**：
+   - 去掉 supervisor，`Dockerfile` 直接运行 `python main.py`。
+   - 单进程，日志输出到 stdout。
+5. **Dashboard**：
+   - HTTP Basic Auth。
+   - `/health` 无需认证，供 Northflank 探针使用。
+   - 状态页、实时订单、内存日志、Telegram 登录向导。
+6. **依赖调整**：
+   - 移除 `sqlalchemy`。
+   - 新增 `pymongo`。
+   - 保留 `fastapi`、`jinja2`、`uvicorn`、`python-multipart`。
+
+### 部署注意
+
+- Northflank 上需创建 MongoDB addon，设置 `MONGODB_URI`。
+- 暴露 HTTP 端口 `8000`，健康检查路径 `/health`。
+- 首次部署后访问 `/login` 完成 Telegram 登录。

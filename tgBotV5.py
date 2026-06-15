@@ -380,6 +380,12 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
     return credentials.username
 
 
+@app.get('/health')
+async def health():
+    """Northflank / load balancer health check endpoint (no auth)."""
+    return {'status': 'ok'}
+
+
 @app.get('/', response_class=HTMLResponse)
 async def dashboard(request: Request, username: str = Depends(verify_credentials)):
     return templates.TemplateResponse('dashboard.html', {

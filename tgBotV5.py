@@ -1190,7 +1190,8 @@ async def start_telegram_client():
 
 async def main():
     config = Config()
-    config.bind = [f'0.0.0.0:{DASHBOARD_PORT}']
+    # 同时监听 IPv4 和 IPv6，兼容 Northflank/K8s 的各种网络栈
+    config.bind = [f'0.0.0.0:{DASHBOARD_PORT}', f'[::]:{DASHBOARD_PORT}']
     config.worker_class = 'asyncio'
 
     # 先启动 Web Dashboard，让 Northflank 立刻有端口可探测；

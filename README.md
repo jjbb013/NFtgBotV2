@@ -92,6 +92,10 @@ python -m pytest tests/ -v
 
 ## Northflank 部署
 
+完整图文步骤请见：[docs/deployment/northflank.md](docs/deployment/northflank.md)。
+
+快速清单：
+
 1. 创建 MongoDB addon，将其连接字符串设置为环境变量 `MONGODB_URI`。
 2. 配置所有必需环境变量。
 3. 暴露 HTTP 端口 `8000`。

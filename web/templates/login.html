@@ -8,11 +8,18 @@
 </div>
 <div>
     <input id="code" placeholder="验证码" type="text">
+</div>
+<div id="password-section" style="display:none;">
+    <input id="password" placeholder="两步验证密码" type="password">
+    <p style="color:#f87171;">你的 Telegram 开启了两步验证，请输入密码。</p>
+</div>
+<div>
     <button onclick="confirmLogin()">确认登录</button>
 </div>
 <pre id="result"></pre>
 <script>
 let phoneCodeHash = '';
+let needPassword = false;
 async function startLogin() {
     const phone = document.getElementById('phone').value;
     const res = await fetch('/api/login/start', {
@@ -23,16 +30,26 @@ async function startLogin() {
     const data = await res.json();
     phoneCodeHash = data.phone_code_hash || '';
     document.getElementById('result').innerText = JSON.stringify(data, null, 2);
+    needPassword = false;
+    document.getElementById('password-section').style.display = 'none';
 }
 async function confirmLogin() {
     const phone = document.getElementById('phone').value;
     const code = document.getElementById('code').value;
+    const payload = {phone, code};
+    if (needPassword) {
+        payload.password = document.getElementById('password').value;
+    }
     const res = await fetch('/api/login/confirm', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({phone, code}),
+        body: JSON.stringify(payload),
     });
     const data = await res.json();
+    if (data.need_password) {
+        needPassword = true;
+        document.getElementById('password-section').style.display = 'block';
+    }
     document.getElementById('result').innerText = JSON.stringify(data, null, 2);
 }
 </script>

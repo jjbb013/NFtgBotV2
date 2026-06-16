@@ -3,6 +3,7 @@ import logging
 import sys
 
 from telethon import TelegramClient, events
+from telethon.errors import SessionPasswordNeededError
 from telethon.sessions import StringSession
 
 import config
@@ -186,12 +187,22 @@ async def start_login(phone):
             return {'success': False, 'error': str(e)}
 
 
-async def confirm_login(phone, code):
+async def confirm_login(phone, code, password=None):
     async with _login_lock:
         if _pending_login.get('phone') != phone:
             return {'success': False, 'error': '请先发送验证码'}
         try:
-            await client.sign_in(phone, code, phone_code_hash=_pending_login['phone_code_hash'])
+            try:
+                await client.sign_in(phone, code, phone_code_hash=_pending_login['phone_code_hash'])
+            except SessionPasswordNeededError:
+                if not password:
+                    return {
+                        'success': False,
+                        'need_password': True,
+                        'error': '已开启两步验证，请输入密码',
+                    }
+                await client.sign_in(password=password)
+
             session_str = client.session.save()
             db.save_session_string(session_str)
             _pending_login.clear()

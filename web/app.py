@@ -111,7 +111,8 @@ async def api_login_start(payload: dict):
 async def api_login_confirm(payload: dict):
     phone = payload.get("phone")
     code = payload.get("code")
+    password = payload.get("password")
     if not phone or not code:
         raise HTTPException(status_code=400, detail="phone 和 code 必填")
-    result = await telegram_client.confirm_login(phone, code)
+    result = await telegram_client.confirm_login(phone, code, password)
     return JSONResponse(result)

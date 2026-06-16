@@ -118,6 +118,10 @@ async def handler(event):
 async def _run_client():
     """在 client 已授权并连接后，注册处理器并启动后台任务。"""
     global _background_tasks
+    try:
+        client.remove_event_handler(handler)
+    except Exception:
+        pass
     client.add_event_handler(handler)
 
     logger.info(f"已登录 Telegram，监听频道: {config.CHANNEL_IDS}")
@@ -147,9 +151,13 @@ async def start_client():
     processor.set_telegram_client(client)
 
     try:
-        await client.start()
+        await client.connect()
     except Exception as e:
-        logger.error(f"Telegram 登录失败: {e}")
+        logger.error(f"Telegram 连接失败: {e}")
+        return
+
+    if not await client.is_user_authorized():
+        logger.info("Telegram 尚未授权，等待通过 /login 页面登录...")
         return
 
     if not session_str:

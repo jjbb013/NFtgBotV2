@@ -237,7 +237,8 @@ https://p01--tgbot-lite--xxxx.code.run/login
 4. 点击 **发送验证码**。
 5. 在手机 Telegram App 里查看验证码（注意不是短信）。
 6. 输入验证码，点击 **确认登录**。
-7. 登录成功后，`StringSession` 会自动写入 MongoDB。
+7. 如果你的 Telegram 账号开启了两步验证，页面会提示输入**两步验证密码**，输入后再次点击确认登录。
+8. 登录成功后，`StringSession` 会自动写入 MongoDB。
 
 > 后续重启服务会自动从 MongoDB 读取 session，无需再次登录。
 

@@ -62,18 +62,21 @@ async def health():
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, user: str = Depends(get_current_user)):
     accounts = telegram_client.accounts
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "accounts": [a.name for a in accounts],
-        "telegram_connected": telegram_client.is_connected(),
-        "startup_time": getattr(app.state, 'startup_time', None),
-        "logs": list(processor.log_buffer)[-50:],
-    })
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {
+            "accounts": [a.name for a in accounts],
+            "telegram_connected": telegram_client.is_connected(),
+            "startup_time": getattr(app.state, 'startup_time', None),
+            "logs": list(processor.log_buffer)[-50:],
+        },
+    )
 
 
 @app.get("/orders", response_class=HTMLResponse)
 async def orders_page(request: Request, user: str = Depends(get_current_user)):
-    return templates.TemplateResponse("orders.html", {"request": request})
+    return templates.TemplateResponse(request, "orders.html", {})
 
 
 @app.get("/api/orders")
@@ -92,7 +95,7 @@ async def logs(user: str = Depends(get_current_user)):
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html", {})
 
 
 @app.post("/api/login/start")

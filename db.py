@@ -1,17 +1,25 @@
 import sys
+from urllib.parse import urlparse
 from pymongo import MongoClient
 from config import MONGODB_URI
 
 _STATE_ID = 'singleton'
 _MAX_IDS_PER_CHANNEL = 1000
 
+# 优先使用 URI 中指定的数据库；若未指定则使用 tgbot_lite
+_parsed = urlparse(MONGODB_URI)
+_DB_NAME = _parsed.path.lstrip('/') or 'tgbot_lite'
+
 try:
     _client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
     _client.admin.command('ping')
-    _db = _client['tgbot_lite']
+    _db = _client[_DB_NAME]
     _state = _db['state']
+    # 触发一次实际读写权限校验
+    _state.find_one({'_id': _STATE_ID})
 except Exception as e:
-    print(f"[FATAL] 无法连接 MongoDB: {e}", file=sys.stderr)
+    print(f"[FATAL] 无法连接或认证 MongoDB: {e}", file=sys.stderr)
+    print(f"[FATAL] 请确认 MONGODB_URI 正确，且用户对数据库 '{_DB_NAME}' 有读写权限。", file=sys.stderr)
     sys.exit(1)
 
 

@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 client = None
 _pending_login = {}
 _login_lock = asyncio.Lock()
+_background_tasks = []
 
 accounts = [OKXAccount(cfg) for cfg in config.get_accounts()]
 
@@ -113,6 +114,27 @@ async def handler(event):
             await processor.process_close_signal(close_type, close_symbol, msg_text, accounts)
 
 
+async def _run_client():
+    """在 client 已授权并连接后，注册处理器并启动后台任务。"""
+    global _background_tasks
+    client.add_event_handler(handler)
+
+    logger.info(f"已登录 Telegram，监听频道: {config.CHANNEL_IDS}")
+    await init_processed_ids()
+    await set_leverage_for_all()
+    await send_startup_prices()
+
+    # 取消旧的后台任务（如果存在）
+    for task in _background_tasks:
+        task.cancel()
+    _background_tasks = [
+        asyncio.create_task(check_and_patch_missing_signals()),
+        asyncio.create_task(health_check()),
+    ]
+
+    await client.run_until_disconnected()
+
+
 async def start_client():
     global client
     session_str = db.load_session_string()
@@ -134,27 +156,27 @@ async def start_client():
         db.save_session_string(new_session)
         logger.info("已保存新的 Telegram StringSession 到 MongoDB")
 
-    logger.info(f"已登录 Telegram，监听频道: {config.CHANNEL_IDS}")
-    await init_processed_ids()
-    await set_leverage_for_all()
-    await send_startup_prices()
+    await _run_client()
 
-    asyncio.create_task(check_and_patch_missing_signals())
-    asyncio.create_task(health_check())
 
-    await client.run_until_disconnected()
+async def _ensure_connected_client():
+    """确保有一个已连接（未授权也可）的 client 实例。"""
+    global client
+    if client is None:
+        client = TelegramClient(
+            StringSession(),
+            config.TG_API_ID,
+            config.TG_API_HASH,
+        )
+    if not client.is_connected():
+        await client.connect()
+    processor.set_telegram_client(client)
 
 
 async def start_login(phone):
-    global client
     async with _login_lock:
-        if client is None:
-            client = TelegramClient(
-                StringSession(),
-                config.TG_API_ID,
-                config.TG_API_HASH,
-            )
         try:
+            await _ensure_connected_client()
             result = await client.send_code_request(phone)
             _pending_login['phone'] = phone
             _pending_login['phone_code_hash'] = result.phone_code_hash
@@ -174,6 +196,10 @@ async def confirm_login(phone, code):
             db.save_session_string(session_str)
             _pending_login.clear()
             processor.set_telegram_client(client)
+
+            # 启动监听和后台任务
+            asyncio.create_task(_run_client())
+
             return {'success': True, 'session_saved': True}
         except Exception as e:
             logger.error(f"登录确认失败: {e}")

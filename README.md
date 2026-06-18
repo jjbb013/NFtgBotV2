@@ -1,118 +1,105 @@
-# Telegram 信号交易机器人
+# Telegram 信号交易机器人（tgBot Lite）
 
-此项目是一个功能强大的 Telegram 信号交易机器人，能够监听指定频道的交易信号，并自动在 OKX 交易所执行相应的开仓和平仓操作。项目支持多账户管理、Docker 一键部署，并具备详细的日志和实时通知功能。
+轻量化的 Telegram 信号交易机器人，监听指定频道交易信号并自动在 OKX 执行开仓/平仓。本项目针对 Northflank PaaS 优化，使用 MongoDB addon 持久化 Telegram session 和已处理消息 ID，无需 Volume。
 
+## 主要特性
 
-## 主要功能与版本历史
+- **模块化**：配置、数据库、OKX 账户、信号解析、Telegram 客户端、Web Dashboard 分离。
+- **MongoDB 持久化**：使用 `StringSession` 存储 Telegram session；使用 MongoDB 存储已处理消息 ID。
+- **轻量 Dashboard**：基于 FastAPI + Jinja2，支持状态查看、实时订单查询、最近日志、Telegram 网页登录向导。
+- **Northflank 适配**：单进程启动、日志输出到 stdout、`/health` 探针无需认证。
 
-### v4 版本 (当前)
+## 项目结构
 
-- **主程序**: `tgBotV4.py`
-- **核心改进**:
-    - 引入了上述的 Session 有效性监控机制。
-    - 优化了代码结构和日志输出。
-
-### v3 版本 (2025-08-05)
-
-1.  **新增交易标的**:
-    *   增加了对 `DOGE-USDT-SWAP` 和 `SOL-USDT-SWAP` 的支持。
-    *   需要在环境变量中为新交易对配置下单数量，见下文。
-2.  **新增平仓逻辑**:
-    *   增加了对 "MA止损" 关键词的识别。当信号中包含此关键词时，机器人将对指定交易对执行 **双向平仓**（无论持有多仓还是空仓，都将平掉）。
-
-### 如何切换回 v2 版本
-
-如果您需要运行旧版 (`tgBotV2.py`)，请修改 `supervisord.conf` 文件：
-
-```ini
-[program:tgBotV3]
-command=python ./tgBotV3.py
-...
+```text
+.
+├── main.py                 # 入口：启动 uvicorn
+├── config.py               # 环境变量读取与校验
+├── db.py                   # MongoDB 持久化
+├── telegram_client.py      # Telegram 客户端、登录向导
+├── core/
+│   ├── helpers.py          # 工具函数（时间、订单 ID、Bark）
+│   ├── account.py          # OKXAccount 封装
+│   ├── signals.py          # 信号解析
+│   └── processor.py        # 开仓/平仓处理、内存日志缓冲
+├── web/
+│   ├── app.py              # FastAPI Dashboard
+│   └── templates/          # Jinja2 模板
+├── static/                 # CSS
+├── tests/                  # 单元测试
+├── Dockerfile
+└── requirements.txt
 ```
 
-修改为:
+## 环境变量
 
-```ini
-[program:tgBotV2]
-command=python ./tgBotV2.py
-...
+### 必需
+
+| 变量 | 说明 |
+|------|------|
+| `TG_API_ID` | Telegram API ID |
+| `TG_API_HASH` | Telegram API Hash |
+| `TG_CHANNEL_IDS` | 监听频道 ID，多个用逗号分隔 |
+| `MONGODB_URI` | MongoDB 连接字符串 |
+| `DASHBOARD_PASSWORD` | Dashboard HTTP Basic Auth 密码 |
+
+### 可选
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `TG_LOG_GROUP_ID` | - | Telegram 日志群组 ID |
+| `DASHBOARD_USERNAME` | `admin` | Dashboard 用户名 |
+| `DASHBOARD_PORT` | `8000` | Dashboard 端口 |
+| `BARK_KEY` | - | Bark 推送 key |
+| `PATCH_MISSING_SIGNALS_INTERVAL` | `30` | 补单检查间隔（秒） |
+| `HEALTH_CHECK_INTERVAL` | `300` | 健康检查间隔（秒） |
+| `LOG_BUFFER_SIZE` | `500` | 内存日志缓冲条数 |
+
+### OKX 账户
+
+支持最多 5 个账户：`OKX1_*` ~ `OKX5_*`。
+
+| 变量 | 说明 |
+|------|------|
+| `OKX1_API_KEY` | API Key |
+| `OKX1_SECRET_KEY` | Secret Key |
+| `OKX1_PASSPHRASE` | Passphrase |
+| `OKX1_FLAG` | `0` 实盘，`1` 模拟盘 |
+| `OKX1_LEVERAGE` | 杠杆倍数 |
+| `OKX1_POSITION_RATIO` | 开仓保证金占可用余额比例 |
+| `OKX1_TP_RATIO` | 止盈比例 |
+| `OKX1_SL_RATIO` | 止损比例 |
+| `OKX1_ACCOUNT_NAME` | 自定义账户名（可选） |
+
+## 本地开发
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 配置 .env
+python main.py
 ```
 
-并确保日志文件名也相应修改，然后重新部署。
+首次启动时 Telegram 未登录，访问 `http://localhost:8000/login` 完成登录。
 
----
+## 测试
 
-## 持久化存储配置
-
-为了在 Northflank 上实现会话文件和已处理消息ID的持久化存储，您需要配置 `DATA_DIR` 环境变量。Northflank 通常会将持久卷挂载到 `/data` 目录，因此建议将 `DATA_DIR` 设置为 `/data`。
-
-**环境变量:**
-
-*   `DATA_DIR`: 持久化数据存储的根目录。**请务必在 Northflank 部署中将其设置为 `/data`。**
-
-例如，在 Northflank 的服务配置中，您应该添加以下环境变量：
-
-```
-DATA_DIR=/data
+```bash
+python -m pytest tests/ -v
 ```
 
-这将确保您的 `session` 文件和 `processed_message_ids.json` 文件存储在持久卷上，从而在服务重启后数据不会丢失。
+## Northflank 部署
 
-## 环境变量配置
+完整图文步骤请见：[docs/deployment/northflank.md](docs/deployment/northflank.md)。
 
-请确保您已配置所有必要的 Telegram 和 OKX 相关的环境变量。
+快速清单：
 
-### 核心环境变量
+1. 创建 MongoDB addon，将其连接字符串设置为环境变量 `MONGODB_URI`。
+2. 配置所有必需环境变量。
+3. 暴露 HTTP 端口 `8000`。
+4. 健康检查路径使用 `/health`（无需认证）。
+5. 部署完成后访问 `/login` 完成 Telegram 登录。
 
-- `TG_API_ID`: 您的 Telegram API ID。
-- `TG_API_HASH`: 您的 Telegram API Hash。
-- `TG_LOG_GROUP_ID`: 用于接收机器人运行日志的 Telegram 群组ID。
-- `TG_CHANNEL_IDS`: 需要监听信号的 Telegram 频道ID，多个请用逗号分隔。
-
-### OKX 账户环境变量 (以账户1为例)
-
-- `OKX1_API_KEY`
-- `OKX1_SECRET_KEY`
-- `OKX1_PASSPHRASE`
-- `OKX1_FLAG`: 模拟盘设置为 `1`，实盘设置为 `0`。
-- `OKX1_LEVERAGE`: 杠杆倍数。
-- `OKX1_POSITION_RATIO`: 开仓保证金占总余额的比例 (例如 `0.25` 代表 25%)。
-- `OKX1_TP_RATIO`: 止盈比例。
-- `OKX1_SL_RATIO`: 止损比例。
-
-*如果您有多个OKX账户，请按 `OKX2_...`, `OKX3_...` 的格式继续添加。*
-
-### 其他可选环境变量
-- `PATCH_MISSING_SIGNALS_INTERVAL`: 历史信号补单检查间隔（秒），默认 `30`。
-- `HEALTH_CHECK_INTERVAL`: 主程序健康检查间隔（秒），默认 `300`。
-
-### v3 版本历史环境变量
-
-为了支持新增的交易对，请添加以下环境变量（以OKX1账户为例）：
-
-*   `OKX1_FIXED_QTY_DOGE`: OKX1账户的DOGE下单数量。
-*   `OKX1_FIXED_QTY_SOL`: OKX1账户的SOL下单数量。
-
-如果您有多个OKX账户，请相应地添加 `OKX2_FIXED_QTY_DOGE` 等。
-
-### 完整环境变量示例
-
-*   `TG_API_ID`
-*   `TG_API_HASH`
-*   `TG_LOG_GROUP_ID`
-*   `TG_CHANNEL_IDS`
-*   `OKX1_API_KEY`
-*   `OKX1_SECRET_KEY`
-*   `OKX1_PASSPHRASE`
-*   `OKX1_FLAG`
-*   `OKX1_LEVERAGE`
-*   `OKX1_FIXED_QTY_BTC`
-*   `OKX1_FIXED_QTY_ETH`
-*   `OKX1_FIXED_QTY_DOGE`  **(v3 新增)**
-*   `OKX1_FIXED_QTY_SOL`   **(v3 新增)**
-*   `OKX1_TP_RATIO`
-*   `OKX1_SL_RATIO`
-*   `PATCH_MISSING_SIGNALS_INTERVAL`
-*   `HEALTH_CHECK_INTERVAL`
-
-请根据您的实际情况配置这些变量。
+> 不再需要 `DATA_DIR` 或持久卷。

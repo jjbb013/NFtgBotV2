@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}状态 | TgBot Lite{% endblock %}
+{% block content %}
+<h1>运行状态</h1>
+<p>Telegram 连接: {{ "✅ 已连接" if telegram_connected else "❌ 未连接" }}</p>
+<p>启动时间: {{ startup_time }}</p>
+<p>账户: {{ ", ".join(accounts) }}</p>
+<h2>最近日志</h2>
+<pre>{% for line in logs %}{{ line }}
+{% endfor %}</pre>
+{% endblock %}

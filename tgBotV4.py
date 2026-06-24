@@ -464,8 +464,15 @@ async def process_close_signal(close_type, symbol, msg_text):
             continue
 
         result = await close_okx_position(account, symbol, close_type)
-        bark_title = f"Tg信号策略平仓-{symbol}"
-        content = build_close_bark_content(close_type, symbol, account['account_name'], result.get('close_results', []), result.get('okx_resp'), result.get('error_msg'), result.get('total_upl'), result.get('pnl_pct'))
+        total_upl = result.get('total_upl')
+        pnl_pct = result.get('pnl_pct')
+        if total_upl is not None and pnl_pct is not None:
+            pnl_sign = "+" if total_upl >= 0 else ""
+            pct_sign = "+" if pnl_pct >= 0 else ""
+            bark_title = f"Tg信号策略平仓-{symbol}（{pnl_sign}{total_upl:.2f} U {pct_sign}{pnl_pct:.2f}%）"
+        else:
+            bark_title = f"Tg信号策略平仓-{symbol}"
+        content = build_close_bark_content(close_type, symbol, account['account_name'], result.get('close_results', []), result.get('okx_resp'), result.get('error_msg'), total_upl, pnl_pct)
         full_log = f"{log_header}\n信号判断: 平仓 {close_type} {symbol} (账户: {account['account_name']})\n操作返回: {json.dumps(result, ensure_ascii=False, indent=2)}"
         logger.info(full_log)
         if TG_LOG_GROUP_ID:
